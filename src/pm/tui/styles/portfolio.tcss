@@ -1,0 +1,56 @@
+/* Portfolio view specific styles */
+
+PortfolioScreen {
+    layout: vertical;
+}
+
+#portfolio-title {
+    dock: top;
+    height: 3;
+    content-align: center middle;
+    background: $primary-background-darken-1;
+    color: $primary-lighten-2;
+    text-style: bold;
+    border-bottom: solid $primary 40%;
+    padding: 0 2;
+}
+
+#portfolio-body {
+    layout: horizontal;
+    height: 1fr;
+}
+
+/* Left panel — project list */
+#left-panel {
+    width: 30%;
+    min-width: 24;
+    border-right: solid $primary 30%;
+    background: $surface-darken-1;
+    padding: 0;
+}
+
+#left-panel-title {
+    dock: top;
+    height: 2;
+    padding: 0 1;
+    background: $surface-darken-2;
+    color: $primary;
+    text-style: bold;
+    border-bottom: solid $surface-lighten-1;
+}
+
+/* Right panel — detail view */
+#right-panel {
+    width: 70%;
+    background: $surface;
+    padding: 0;
+}
+
+/* Status bar */
+StatusBar {
+    dock: bottom;
+    height: 1;
+    background: $primary-background-darken-2;
+    color: $text;
+    padding: 0 1;
+}

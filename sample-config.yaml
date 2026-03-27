@@ -1,0 +1,53 @@
+accounts:
+  personal:
+    token_env: GITHUB_TOKEN_PERSONAL
+    default: true
+  company:
+    token_env: GITHUB_TOKEN_COMPANY
+
+projects:
+  401k-website:
+    account: personal
+    repos:
+      - owner/401k-frontend
+      - owner/401k-backend
+    local_path: ~/projects/401k
+    instructions: |
+      Focus on mobile responsive design.
+      Use Tailwind CSS for styling.
+    assets:
+      - ~/designs/401k-mockup.png
+    agent: claude-code
+    agent_config:
+      model: claude-sonnet-4-6
+      permissions: dangerously-skip
+
+  faa-project:
+    account: company
+    repos:
+      - company-org/faa-main
+      - company-org/faa-docs
+    local_path: ~/projects/faa
+    instructions: |
+      Follow FAA compliance guidelines.
+
+defaults:
+  agent: claude-code
+  branch_prefix: pm/
+  worktree_base: ~/.pm/worktrees
+  poll_interval: 30s
+
+reactions:
+  ci-failed:
+    auto: true
+    action: send-to-agent
+    retries: 3
+    message: "CI is failing. Run gh pr checks, fix issues, push."
+  changes-requested:
+    auto: true
+    action: send-to-agent
+    retries: 2
+    escalate_after: 30m
+  approved-and-green:
+    auto: false
+    action: notify

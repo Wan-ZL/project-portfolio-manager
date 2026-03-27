@@ -1,0 +1,66 @@
+/* Global styles — dark theme with cyan/green accents */
+
+Screen {
+    background: $surface;
+}
+
+/* Scrollbar styling */
+Scrollbar {
+    background: $surface-darken-1;
+    scrollbar-color: $primary 50%;
+    scrollbar-color-hover: $primary 80%;
+    scrollbar-color-active: $primary;
+}
+
+/* Empty state text */
+.empty-state {
+    text-align: center;
+    color: $text-muted;
+    padding: 2;
+}
+
+/* Header area */
+#app-header {
+    dock: top;
+    height: 3;
+    background: $primary-background;
+    padding: 1 2;
+    text-align: center;
+}
+
+/* Footer area */
+Footer {
+    background: $primary-background;
+}
+
+/* TabbedContent styles */
+TabbedContent {
+    border: none;
+}
+
+TabPane {
+    padding: 0;
+}
+
+/* Tab header overrides */
+Tabs {
+    background: $surface-darken-1;
+}
+
+Tab {
+    color: $text-muted;
+    padding: 0 2;
+}
+
+Tab.-active {
+    color: $text;
+    text-style: bold;
+}
+
+Tab:hover {
+    color: $primary-lighten-2;
+}
+
+Underline > .underline--bar {
+    color: $primary 40%;
+}
