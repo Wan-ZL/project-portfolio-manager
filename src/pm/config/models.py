@@ -4,7 +4,8 @@ from pydantic import BaseModel, Field
 
 
 class AccountConfig(BaseModel):
-    token_env: str
+    token_env: str = ""
+    token_source: str = ""  # "credentials" to use ~/.ppm/credentials.yaml
     default: bool = False
 
 

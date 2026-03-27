@@ -26,9 +26,19 @@ class GitHubManager:
         self.clients: dict[str, Github] = {}
 
         for name, account in config.accounts.items():
-            token = os.environ.get(account.token_env, "")
+            token = ""
+            # If token_source is credentials, check credentials.yaml first
+            if account.token_source == "credentials":
+                try:
+                    from pm.auth.credentials import get_token
+                    token = get_token(name) or ""
+                except Exception:
+                    pass
+            # Then try env var if configured and no token yet
+            if not token and account.token_env:
+                token = os.environ.get(account.token_env, "")
+            # Final fallback: always check credentials.yaml
             if not token:
-                # Fallback: check credentials.yaml
                 try:
                     from pm.auth.credentials import get_token
                     token = get_token(name) or ""
@@ -37,7 +47,8 @@ class GitHubManager:
             if token:
                 self.clients[name] = Github(token)
             else:
-                logger.warning(f"No token found for account '{name}' (env: {account.token_env})")
+                env_info = f" (env: {account.token_env})" if account.token_env else ""
+                logger.warning(f"No token found for account '{name}'{env_info}")
 
     def client_for_account(self, account_name: str) -> Optional[Github]:
         return self.clients.get(account_name)

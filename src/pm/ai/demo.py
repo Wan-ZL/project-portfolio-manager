@@ -293,7 +293,23 @@ def get_demo_sessions(project_name: str) -> list[SessionInfo]:
 
 
 def is_demo_mode() -> bool:
-    """Check if demo mode should be active (no config file exists)."""
-    from pathlib import Path
-    config_path = Path.home() / ".ppm" / "config.yaml"
-    return not config_path.exists()
+    """Check if demo mode should be active.
+
+    Returns False if:
+    - credentials.yaml has a valid account (even without config), OR
+    - config.yaml exists AND has real projects (not just the sample placeholder)
+    Returns True only if no credentials exist AND (no config OR config is placeholder-only).
+    """
+    from pm.auth.credentials import load_credentials
+    creds = load_credentials()
+    accounts = creds.get("accounts", {})
+    if accounts:
+        # User has credentials, they want real data
+        return False
+
+    from pm.config.loader import DEFAULT_CONFIG_PATH, load_config, has_real_projects
+    if not DEFAULT_CONFIG_PATH.exists():
+        return True
+
+    cfg = load_config()
+    return not has_real_projects(cfg)

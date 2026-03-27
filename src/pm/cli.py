@@ -152,7 +152,13 @@ def _show_config():
         console.print("[bold]Accounts:[/bold]")
         for name, account in cfg.accounts.items():
             default_marker = " [green](default)[/green]" if account.default else ""
-            console.print(f"  {name}: token_env={account.token_env}{default_marker}")
+            if account.token_source == "credentials":
+                source_info = "source=credentials"
+            elif account.token_env:
+                source_info = f"token_env={account.token_env}"
+            else:
+                source_info = "no token configured"
+            console.print(f"  {name}: {source_info}{default_marker}")
     else:
         console.print("[dim]No accounts configured[/dim]")
 

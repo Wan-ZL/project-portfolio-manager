@@ -182,6 +182,27 @@ def _get_projects(screen) -> list[ProjectInfo]:
     if _is_demo(screen):
         from pm.ai.demo import get_demo_projects
         return get_demo_projects()
+    # Try to load real projects from config
+    try:
+        from pm.config.loader import load_config
+        cfg = load_config()
+        if cfg.projects:
+            projects = []
+            for name, project in cfg.projects.items():
+                projects.append(ProjectInfo(
+                    name=name,
+                    account=project.account,
+                    repos=list(project.repos),
+                    open_prs=0,
+                    active_sessions=0,
+                    status="gray",
+                    summary="Loading...",
+                    instructions=project.instructions,
+                    assets=list(project.assets),
+                ))
+            return projects
+    except Exception:
+        pass
     return get_sample_projects()
 
 
@@ -190,6 +211,13 @@ def _get_prs(screen, project_name: str) -> list[EnhancedPR]:
     if _is_demo(screen):
         from pm.ai.demo import get_demo_prs
         return get_demo_prs(project_name)
+    # Check live data cache on the screen
+    try:
+        live_prs = getattr(screen, '_live_prs', {})
+        if project_name in live_prs:
+            return live_prs[project_name]
+    except Exception:
+        pass
     return get_sample_prs(project_name)
 
 
@@ -215,6 +243,186 @@ def _get_ai_suggestions(screen) -> list[dict] | None:
         from pm.ai.demo import DEMO_SUGGESTIONS
         return DEMO_SUGGESTIONS
     return None
+
+
+def _has_credentials() -> bool:
+    """Check if user has stored credentials."""
+    try:
+        from pm.auth.credentials import load_credentials
+        creds = load_credentials()
+        return bool(creds.get("accounts", {}))
+    except Exception:
+        return False
+
+
+def _get_credential_token(account: str = "personal") -> str | None:
+    """Get token from credentials.yaml."""
+    try:
+        from pm.auth.credentials import get_token
+        return get_token(account)
+    except Exception:
+        return None
+
+
+def _fetch_live_projects_and_prs() -> tuple[list[ProjectInfo], dict[str, list[EnhancedPR]]]:
+    """Fetch real projects and PRs from GitHub using stored credentials.
+
+    Returns (projects, {project_name: [prs]}).
+    Works with or without a config file. Without config, auto-discovers repos.
+    """
+    from pm.auth.credentials import load_credentials
+    from pm.auth.github_oauth import discover_repos
+
+    creds = load_credentials()
+    accounts = creds.get("accounts", {})
+    if not accounts:
+        return [], {}
+
+    # Try loading config first
+    from pm.config.loader import load_config, has_real_projects
+    cfg = load_config()
+
+    projects: list[ProjectInfo] = []
+    all_prs: dict[str, list[EnhancedPR]] = {}
+
+    if has_real_projects(cfg):
+        # Use config-based projects
+        for account_name in accounts:
+            token = accounts[account_name].get("token", "")
+            if not token:
+                continue
+
+            import httpx
+            headers = {
+                "Authorization": f"token {token}",
+                "Accept": "application/json",
+            }
+
+            for proj_name, proj_cfg in cfg.projects.items():
+                if proj_cfg.account != account_name:
+                    continue
+                proj_prs: list[EnhancedPR] = []
+                for repo_name in proj_cfg.repos:
+                    try:
+                        resp = httpx.get(
+                            f"https://api.github.com/repos/{repo_name}/pulls",
+                            headers=headers,
+                            params={"state": "open", "per_page": 100},
+                            timeout=15,
+                        )
+                        if resp.status_code == 200:
+                            for pr_data in resp.json():
+                                proj_prs.append(EnhancedPR(
+                                    repo_id=repo_name,
+                                    number=pr_data.get("number", 0),
+                                    title=pr_data.get("title", ""),
+                                    state="open",
+                                    author=pr_data.get("user", {}).get("login", ""),
+                                    created_at=datetime.fromisoformat(
+                                        pr_data["created_at"].replace("Z", "+00:00")
+                                    ) if pr_data.get("created_at") else datetime.now(),
+                                    updated_at=datetime.fromisoformat(
+                                        pr_data["updated_at"].replace("Z", "+00:00")
+                                    ) if pr_data.get("updated_at") else datetime.now(),
+                                    url=pr_data.get("html_url", ""),
+                                ))
+                    except Exception:
+                        pass
+
+                pr_count = len(proj_prs)
+                has_failing = False  # Would need checks API for real status
+
+                status = "green"
+                if pr_count == 0:
+                    status = "gray"
+                elif pr_count > 5:
+                    status = "yellow"
+
+                all_prs[proj_name] = proj_prs
+                projects.append(ProjectInfo(
+                    name=proj_name,
+                    account=proj_cfg.account,
+                    repos=list(proj_cfg.repos),
+                    open_prs=pr_count,
+                    active_sessions=0,
+                    status=status,
+                    summary=f"{pr_count} open PRs" if pr_count else "No open PRs",
+                    instructions=proj_cfg.instructions,
+                    assets=list(proj_cfg.assets),
+                ))
+    else:
+        # No real config: auto-discover repos from GitHub
+        for account_name, account_data in accounts.items():
+            token = account_data.get("token", "")
+            if not token:
+                continue
+
+            repos = discover_repos(token)
+            if not repos:
+                continue
+
+            username = account_data.get("username", "")
+            import httpx
+            headers = {
+                "Authorization": f"token {token}",
+                "Accept": "application/json",
+            }
+
+            # Group repos by owner
+            grouped: dict[str, list[dict]] = {}
+            for repo in repos:
+                owner = repo.get("owner", "unknown")
+                grouped.setdefault(owner, []).append(repo)
+
+            for owner, owner_repos in grouped.items():
+                proj_prs: list[EnhancedPR] = []
+                repo_names = []
+                for repo in owner_repos:
+                    full_name = repo["full_name"]
+                    repo_names.append(full_name)
+                    try:
+                        resp = httpx.get(
+                            f"https://api.github.com/repos/{full_name}/pulls",
+                            headers=headers,
+                            params={"state": "open", "per_page": 100},
+                            timeout=15,
+                        )
+                        if resp.status_code == 200:
+                            for pr_data in resp.json():
+                                proj_prs.append(EnhancedPR(
+                                    repo_id=full_name,
+                                    number=pr_data.get("number", 0),
+                                    title=pr_data.get("title", ""),
+                                    state="open",
+                                    author=pr_data.get("user", {}).get("login", ""),
+                                    created_at=datetime.fromisoformat(
+                                        pr_data["created_at"].replace("Z", "+00:00")
+                                    ) if pr_data.get("created_at") else datetime.now(),
+                                    updated_at=datetime.fromisoformat(
+                                        pr_data["updated_at"].replace("Z", "+00:00")
+                                    ) if pr_data.get("updated_at") else datetime.now(),
+                                    url=pr_data.get("html_url", ""),
+                                ))
+                    except Exception:
+                        pass
+
+                pr_count = len(proj_prs)
+                status = "green" if pr_count == 0 else ("yellow" if pr_count > 5 else "green")
+                if pr_count == 0:
+                    status = "gray"
+
+                all_prs[owner] = proj_prs
+                projects.append(ProjectInfo(
+                    name=owner,
+                    account=account_name,
+                    repos=repo_names,
+                    open_prs=pr_count,
+                    active_sessions=0,
+                    status=status,
+                    summary=f"{pr_count} open PRs across {len(repo_names)} repos",
+                ))
+
+    return projects, all_prs
 
 
 class PortfolioScreen(Screen):
@@ -296,6 +504,8 @@ class PortfolioScreen(Screen):
         self._ai_suggestions: list[dict] = []
         self._loading_summary = False
         self._loading_suggestions = False
+        self._live_prs: dict[str, list[EnhancedPR]] = {}
+        self._live_loading = False
 
     BINDINGS = [
         Binding("q", "quit_app", "Quit"),
@@ -337,16 +547,26 @@ class PortfolioScreen(Screen):
             from pm.ai.demo import DEMO_SUMMARIES, DEMO_SUGGESTIONS
             self._ai_summaries = dict(DEMO_SUMMARIES)
             self._ai_suggestions = list(DEMO_SUGGESTIONS)
+        elif _has_credentials():
+            self._start_live_loading()
         else:
-            # Background loading placeholder for real mode
             self._start_background_loading()
+
+    def _start_live_loading(self) -> None:
+        """Start background loading of live GitHub data."""
+        self._live_loading = True
+        status_bar = self.query_one(StatusBar)
+        status_bar.set_message("Fetching live data from GitHub...")
+        self.run_worker(self._fetch_live_data_worker, name="live_fetch", thread=True)
+
+    async def _fetch_live_data_worker(self) -> tuple[list[ProjectInfo], dict[str, list[EnhancedPR]]]:
+        """Worker to fetch live data from GitHub."""
+        return _fetch_live_projects_and_prs()
 
     def _start_background_loading(self) -> None:
         """Start background loading of data. Uses Workers to avoid blocking."""
         status_bar = self.query_one(StatusBar)
         status_bar.set_message("Loading project data...")
-        # In a real implementation with GitHub API, this would use self.run_worker()
-        # For now, just clear the loading message
         self.set_timer(1, lambda: status_bar.set_message(""))
 
     def on_project_list_project_selected(self, event: ProjectList.ProjectSelected) -> None:
@@ -396,19 +616,27 @@ class PortfolioScreen(Screen):
         # Invalidate AI summaries
         self._ai_summaries.clear()
         self._ai_suggestions.clear()
-
-        # Reload data
-        projects = _get_projects(self)
-        project_list = self.query_one(ProjectList)
-        project_list.set_projects(projects)
+        self._live_prs.clear()
 
         # Re-load AI data
         if _is_demo(self):
             from pm.ai.demo import DEMO_SUMMARIES, DEMO_SUGGESTIONS
             self._ai_summaries = dict(DEMO_SUMMARIES)
             self._ai_suggestions = list(DEMO_SUGGESTIONS)
-
-        self.set_timer(2, lambda: status_bar.set_message(""))
+            # Reload data
+            projects = _get_projects(self)
+            project_list = self.query_one(ProjectList)
+            project_list.set_projects(projects)
+            self.set_timer(2, lambda: status_bar.set_message(""))
+        elif _has_credentials():
+            # Re-fetch live data
+            self._start_live_loading()
+        else:
+            # Reload data
+            projects = _get_projects(self)
+            project_list = self.query_one(ProjectList)
+            project_list.set_projects(projects)
+            self.set_timer(2, lambda: status_bar.set_message(""))
 
     def action_suggest(self) -> None:
         status_bar = self.query_one(StatusBar)
@@ -456,6 +684,35 @@ class PortfolioScreen(Screen):
             return []
 
     def on_worker_state_changed(self, event: Worker.StateChanged) -> None:
+        # Handle live data fetch completion
+        if event.worker.name == "live_fetch" and event.state == WorkerState.SUCCESS:
+            self._live_loading = False
+            result = event.worker.result
+            if result:
+                projects, prs_map = result
+                if projects:
+                    self._live_prs = prs_map
+                    project_list = self.query_one(ProjectList)
+                    project_list.set_projects(projects)
+                    status_bar = self.query_one(StatusBar)
+                    total_prs = sum(len(prs) for prs in prs_map.values())
+                    status_bar.set_message(
+                        f"Loaded {len(projects)} projects, {total_prs} open PRs"
+                    )
+                    self.set_timer(3, lambda: status_bar.set_message(""))
+                    return
+            status_bar = self.query_one(StatusBar)
+            status_bar.set_message("Could not fetch live data")
+            self.set_timer(3, lambda: status_bar.set_message(""))
+            return
+
+        if event.worker.name == "live_fetch" and event.state == WorkerState.ERROR:
+            self._live_loading = False
+            status_bar = self.query_one(StatusBar)
+            status_bar.set_message("Failed to fetch GitHub data")
+            self.set_timer(3, lambda: status_bar.set_message(""))
+            return
+
         if event.state == WorkerState.SUCCESS and self._loading_suggestions:
             self._loading_suggestions = False
             result = event.worker.result
