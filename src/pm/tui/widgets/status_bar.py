@@ -6,7 +6,7 @@ from textual.widgets import Static
 
 
 class StatusBar(Widget):
-    """Bottom status bar with keyboard shortcuts"""
+    """Bottom status bar with keyboard shortcuts and polling status"""
 
     DEFAULT_CSS = """
     StatusBar {
@@ -17,11 +17,19 @@ class StatusBar(Widget):
         color: $text;
         padding: 0 1;
     }
+    #status-left {
+        width: 1fr;
+    }
+    #status-right {
+        width: auto;
+        text-align: right;
+    }
     """
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self._message = ""
+        self._polling_status = ""
 
     def compose(self) -> ComposeResult:
         yield Static(self._build_shortcuts(), id="shortcuts")
@@ -34,7 +42,10 @@ class StatusBar(Widget):
             ("[bold cyan]r[/bold cyan] Refresh", ""),
             ("[bold cyan]q[/bold cyan] Quit", ""),
         ]
-        return "  ".join(s[0] for s in shortcuts)
+        base = "  ".join(s[0] for s in shortcuts)
+        if self._polling_status:
+            return f"{base}  [dim]|[/dim]  {self._polling_status}"
+        return base
 
     def set_message(self, msg: str) -> None:
         self._message = msg
@@ -43,3 +54,11 @@ class StatusBar(Widget):
             self.query_one("#shortcuts", Static).update(text)
         except Exception:
             pass
+
+    def set_polling_status(self, status: str) -> None:
+        self._polling_status = status
+        if not self._message:
+            try:
+                self.query_one("#shortcuts", Static).update(self._build_shortcuts())
+            except Exception:
+                pass

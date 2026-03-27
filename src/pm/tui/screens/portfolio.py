@@ -7,10 +7,12 @@ from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import Container, Horizontal
 from textual.screen import Screen
+from textual.timer import Timer
 from textual.widgets import Static, Footer, Input, Label
 from textual.worker import Worker, WorkerState
 
 from pm.github.pr import EnhancedPR
+from pm.tui.polling import SmartPoller, PollingUpdate
 from pm.tui.widgets.detail_panel import DetailPanel
 from pm.tui.widgets.project_list import ProjectInfo, ProjectList
 from pm.tui.widgets.session_list import SessionInfo
@@ -506,6 +508,8 @@ class PortfolioScreen(Screen):
         self._loading_suggestions = False
         self._live_prs: dict[str, list[EnhancedPR]] = {}
         self._live_loading = False
+        self._poller: SmartPoller | None = None
+        self._poll_timer: Timer | None = None
 
     BINDINGS = [
         Binding("q", "quit_app", "Quit"),
@@ -551,6 +555,87 @@ class PortfolioScreen(Screen):
             self._start_live_loading()
         else:
             self._start_background_loading()
+
+    def _start_polling(self) -> None:
+        """Initialize and start the smart poller."""
+        if self._poller is not None:
+            return
+        try:
+            from pm.auth.credentials import load_credentials
+            from pm.config.loader import load_config, has_real_projects
+            creds = load_credentials()
+            if not creds.get("accounts"):
+                return
+            cfg = load_config()
+            if not has_real_projects(cfg):
+                cfg = None
+            self._poller = SmartPoller(credentials=creds, config=cfg)
+            if self._data_has_projects():
+                self._poller._data.projects = list(self._get_current_projects())
+                self._poller._data.prs = dict(self._live_prs)
+            self._poll_timer = self.set_interval(5, self._poll_tick)
+        except Exception:
+            pass
+
+    def _data_has_projects(self) -> bool:
+        try:
+            project_list = self.query_one(ProjectList)
+            return bool(project_list._projects)
+        except Exception:
+            return False
+
+    def _get_current_projects(self) -> list[ProjectInfo]:
+        try:
+            project_list = self.query_one(ProjectList)
+            return list(project_list._projects)
+        except Exception:
+            return []
+
+    async def _poll_tick(self) -> None:
+        """Called every 5 seconds by the timer to poll GitHub."""
+        if self._poller is None or self._live_loading:
+            return
+        self.run_worker(self._poll_worker, name="poll_tick", thread=True)
+
+    async def _poll_worker(self) -> PollingUpdate | None:
+        """Worker to run a single poll tick."""
+        if self._poller is None:
+            return None
+        return await self._poller.tick()
+
+    def _apply_polling_update(self, update: PollingUpdate) -> None:
+        """Apply a polling update to the TUI."""
+        if update.projects_changed and self._poller:
+            self._live_prs = dict(self._poller.data.prs)
+            if self._poller.data.projects:
+                project_list = self.query_one(ProjectList)
+                project_list.set_projects(self._poller.data.projects)
+
+        if update.new_prs:
+            names = ", ".join(f"#{p.number}" for p in update.new_prs[:3])
+            extra = f" +{len(update.new_prs) - 3} more" if len(update.new_prs) > 3 else ""
+            status_bar = self.query_one(StatusBar)
+            status_bar.set_message(f"New PRs: {names}{extra}")
+            self.set_timer(5, lambda: status_bar.set_message(""))
+
+        self._update_polling_status()
+
+    def _update_polling_status(self) -> None:
+        """Update the status bar with polling info."""
+        if self._poller is None:
+            return
+        try:
+            status_bar = self.query_one(StatusBar)
+            status_bar.set_polling_status(self._poller.get_status_text())
+        except Exception:
+            pass
+
+    def _stop_polling(self) -> None:
+        """Stop the poller and timer."""
+        if self._poll_timer is not None:
+            self._poll_timer.stop()
+            self._poll_timer = None
+        self._poller = None
 
     def _start_live_loading(self) -> None:
         """Start background loading of live GitHub data."""
@@ -629,14 +714,22 @@ class PortfolioScreen(Screen):
             project_list.set_projects(projects)
             self.set_timer(2, lambda: status_bar.set_message(""))
         elif _has_credentials():
-            # Re-fetch live data
-            self._start_live_loading()
+            if self._poller is not None:
+                self.run_worker(self._force_refresh_worker, name="force_refresh", thread=True)
+            else:
+                self._start_live_loading()
         else:
             # Reload data
             projects = _get_projects(self)
             project_list = self.query_one(ProjectList)
             project_list.set_projects(projects)
             self.set_timer(2, lambda: status_bar.set_message(""))
+
+    async def _force_refresh_worker(self) -> PollingUpdate | None:
+        """Worker for force refresh via 'r' key."""
+        if self._poller is None:
+            return None
+        return await self._poller.force_refresh()
 
     def action_suggest(self) -> None:
         status_bar = self.query_one(StatusBar)
@@ -684,6 +777,34 @@ class PortfolioScreen(Screen):
             return []
 
     def on_worker_state_changed(self, event: Worker.StateChanged) -> None:
+        # Handle poll tick completion
+        if event.worker.name == "poll_tick" and event.state == WorkerState.SUCCESS:
+            result = event.worker.result
+            if result is not None:
+                self._apply_polling_update(result)
+            else:
+                self._update_polling_status()
+            return
+
+        if event.worker.name == "poll_tick" and event.state == WorkerState.ERROR:
+            return
+
+        # Handle force refresh completion
+        if event.worker.name == "force_refresh" and event.state == WorkerState.SUCCESS:
+            result = event.worker.result
+            if result is not None:
+                self._apply_polling_update(result)
+            status_bar = self.query_one(StatusBar)
+            status_bar.set_message("Refresh complete")
+            self.set_timer(3, lambda: status_bar.set_message(""))
+            return
+
+        if event.worker.name == "force_refresh" and event.state == WorkerState.ERROR:
+            status_bar = self.query_one(StatusBar)
+            status_bar.set_message("Force refresh failed")
+            self.set_timer(3, lambda: status_bar.set_message(""))
+            return
+
         # Handle live data fetch completion
         if event.worker.name == "live_fetch" and event.state == WorkerState.SUCCESS:
             self._live_loading = False
@@ -700,10 +821,12 @@ class PortfolioScreen(Screen):
                         f"Loaded {len(projects)} projects, {total_prs} open PRs"
                     )
                     self.set_timer(3, lambda: status_bar.set_message(""))
+                    self._start_polling()
                     return
             status_bar = self.query_one(StatusBar)
             status_bar.set_message("Could not fetch live data")
             self.set_timer(3, lambda: status_bar.set_message(""))
+            self._start_polling()
             return
 
         if event.worker.name == "live_fetch" and event.state == WorkerState.ERROR:
@@ -711,6 +834,7 @@ class PortfolioScreen(Screen):
             status_bar = self.query_one(StatusBar)
             status_bar.set_message("Failed to fetch GitHub data")
             self.set_timer(3, lambda: status_bar.set_message(""))
+            self._start_polling()
             return
 
         if event.state == WorkerState.SUCCESS and self._loading_suggestions:
@@ -759,6 +883,9 @@ class PortfolioScreen(Screen):
                 self.set_timer(
                     2, lambda: status_bar.set_message(f"Task created: {task_desc}")
                 )
+
+    def on_unmount(self) -> None:
+        self._stop_polling()
 
     def action_help(self) -> None:
         from pm.tui.screens.help import HelpScreen
