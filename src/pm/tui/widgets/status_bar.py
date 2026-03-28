@@ -40,6 +40,7 @@ class StatusBar(Widget):
             ("[bold cyan]Tab[/bold cyan] Switch Tabs", ""),
             ("[bold cyan]Enter[/bold cyan] Open", ""),
             ("[bold cyan]r[/bold cyan] Refresh", ""),
+            ("[bold cyan],[/bold cyan] Settings", ""),
             ("[bold cyan]q[/bold cyan] Quit", ""),
         ]
         base = "  ".join(s[0] for s in shortcuts)

@@ -80,6 +80,7 @@ class HelpScreen(ModalScreen):
                 yield Static("  [bold]n[/bold]                   New task for selected project", classes="help-shortcut-row")
                 yield Static("  [bold]s[/bold]                   AI suggest next action", classes="help-shortcut-row")
                 yield Static("  [bold]r[/bold]                   Refresh all data", classes="help-shortcut-row")
+                yield Static("  [bold],[/bold]                   Open Settings", classes="help-shortcut-row")
                 yield Static("  [bold]?[/bold]                   Toggle this help", classes="help-shortcut-row")
                 yield Static("  [bold]q[/bold]                   Quit", classes="help-shortcut-row")
 

@@ -1,0 +1,53 @@
+/* Settings screen styles */
+
+SettingsScreen {
+    layout: vertical;
+}
+
+#settings-title {
+    dock: top;
+    height: 3;
+    content-align: center middle;
+    background: $primary-background-darken-1;
+    color: $primary-lighten-2;
+    text-style: bold;
+    border-bottom: solid $primary 40%;
+    padding: 0 2;
+}
+
+#settings-body {
+    width: 100%;
+    height: 1fr;
+    padding: 1 2;
+}
+
+.settings-section-header {
+    text-style: bold;
+    color: $primary;
+    padding: 1 0;
+}
+
+#accounts-list {
+    height: auto;
+}
+
+AccountItem {
+    height: auto;
+    padding: 1 2;
+    margin: 0 1 1 1;
+    background: $surface-darken-1;
+    border: round $primary 30%;
+}
+
+#token-input-container {
+    display: none;
+    padding: 1 2;
+    margin: 0 1;
+    background: $surface-darken-2;
+    border: round $primary 30%;
+    height: auto;
+}
+
+#token-input-container.visible {
+    display: block;
+}

@@ -44,10 +44,55 @@ def get_username(account: str = "personal", path: Path | None = None) -> str | N
     return account_data.get("username")
 
 
+def get_selected_repos(account: str, path: Path | None = None) -> list[str]:
+    creds = load_credentials(path)
+    account_data = creds.get("accounts", {}).get(account, {})
+    return account_data.get("selected_repos", [])
+
+
+def save_selected_repos(account: str, repos: list[str], path: Path | None = None) -> None:
+    creds = load_credentials(path)
+    if account in creds.get("accounts", {}):
+        creds["accounts"][account]["selected_repos"] = repos
+        save_credentials(creds, path)
+
+
 def save_account(account: str, token: str, username: str, path: Path | None = None) -> None:
     creds = load_credentials(path)
+    existing = creds["accounts"].get(account, {})
     creds["accounts"][account] = {
         "token": token,
         "username": username,
+        "selected_repos": existing.get("selected_repos", []),
     }
     save_credentials(creds, path)
+
+
+def remove_account(account: str, path: Path | None = None) -> None:
+    creds = load_credentials(path)
+    if account in creds.get("accounts", {}):
+        del creds["accounts"][account]
+        save_credentials(creds, path)
+
+
+def list_accounts(path: Path | None = None) -> list[dict]:
+    creds = load_credentials(path)
+    accounts = creds.get("accounts", {})
+    result = []
+    for name, data in accounts.items():
+        result.append({
+            "id": name,
+            "username": data.get("username", "unknown"),
+            "has_token": bool(data.get("token")),
+            "selected_repos": data.get("selected_repos", []),
+        })
+    return result
+
+
+def next_account_id(path: Path | None = None) -> str:
+    creds = load_credentials(path)
+    accounts = creds.get("accounts", {})
+    idx = 1
+    while f"account-{idx}" in accounts:
+        idx += 1
+    return f"account-{idx}"

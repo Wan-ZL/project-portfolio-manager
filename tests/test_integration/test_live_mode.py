@@ -126,12 +126,16 @@ class TestTUILiveMode:
     @pytest.mark.asyncio
     @patch("pm.tui.screens.portfolio._has_credentials", return_value=False)
     @patch("pm.tui.screens.portfolio._is_demo", return_value=False)
-    async def test_no_credentials_shows_sample_data(self, mock_demo, mock_creds):
-        """Without credentials and not in demo mode, show sample data."""
+    async def test_no_credentials_shows_empty_state(self, mock_demo, mock_creds):
+        """Without credentials and not in demo mode, show empty state."""
         app = PMApp(demo=False)
         async with app.run_test() as pilot:
-            project_list = app.query_one(ProjectList)
-            assert len(project_list._items) == 4
+            # Empty state should be visible
+            empty = app.query_one("#empty-state-container")
+            assert "visible" in empty.classes
+            # Portfolio body should be hidden
+            body = app.query_one("#portfolio-body")
+            assert "hidden" in body.classes
 
     @pytest.mark.asyncio
     async def test_demo_flag_shows_demo_data(self):

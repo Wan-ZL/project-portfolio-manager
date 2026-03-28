@@ -444,9 +444,32 @@ class PortfolioScreen(Screen):
         padding: 0 2;
     }
 
+    #empty-state-container {
+        width: 100%;
+        height: 1fr;
+        content-align: center middle;
+        display: none;
+    }
+
+    #empty-state-container.visible {
+        display: block;
+    }
+
+    #empty-state-text {
+        text-align: center;
+        color: $text-muted;
+        width: auto;
+        height: auto;
+        padding: 4 8;
+    }
+
     #portfolio-body {
         layout: horizontal;
         height: 1fr;
+    }
+
+    #portfolio-body.hidden {
+        display: none;
     }
 
     #left-panel {
@@ -522,12 +545,26 @@ class PortfolioScreen(Screen):
         Binding("s", "suggest", "Suggest"),
         Binding("r", "refresh", "Refresh"),
         Binding("question_mark", "help", "Help"),
+        Binding("comma", "open_settings", "Settings"),
+        Binding("d", "toggle_demo", "Demo", show=False),
     ]
 
     def compose(self) -> ComposeResult:
         yield Static(
             "[bold]Portfolio Manager[/bold]  [dim]\u2502  Your projects at a glance[/dim]",
             id="portfolio-title",
+        )
+        yield Container(
+            Static(
+                "\n\n"
+                "[bold cyan]Welcome to PPM![/bold cyan]\n\n"
+                "No GitHub accounts connected yet.\n\n"
+                "Press [bold][,][/bold] to open Settings\n"
+                "and connect your first GitHub account.\n\n"
+                "Or press [bold][d][/bold] to view demo data.\n",
+                id="empty-state-text",
+            ),
+            id="empty-state-container",
         )
         with Horizontal(id="portfolio-body"):
             with Container(id="left-panel"):
@@ -542,19 +579,34 @@ class PortfolioScreen(Screen):
         yield Footer()
 
     def on_mount(self) -> None:
-        projects = _get_projects(self)
-        project_list = self.query_one(ProjectList)
-        project_list.set_projects(projects)
-
-        # Pre-load AI summaries for demo mode
         if _is_demo(self):
+            self._show_portfolio_view()
+            projects = _get_projects(self)
+            project_list = self.query_one(ProjectList)
+            project_list.set_projects(projects)
             from pm.ai.demo import DEMO_SUMMARIES, DEMO_SUGGESTIONS
             self._ai_summaries = dict(DEMO_SUMMARIES)
             self._ai_suggestions = list(DEMO_SUGGESTIONS)
         elif _has_credentials():
+            self._show_portfolio_view()
+            projects = _get_projects(self)
+            project_list = self.query_one(ProjectList)
+            project_list.set_projects(projects)
             self._start_live_loading()
         else:
-            self._start_background_loading()
+            self._show_empty_state()
+
+    def _show_empty_state(self) -> None:
+        empty = self.query_one("#empty-state-container")
+        empty.add_class("visible")
+        body = self.query_one("#portfolio-body")
+        body.add_class("hidden")
+
+    def _show_portfolio_view(self) -> None:
+        empty = self.query_one("#empty-state-container")
+        empty.remove_class("visible")
+        body = self.query_one("#portfolio-body")
+        body.remove_class("hidden")
 
     def _start_polling(self) -> None:
         """Initialize and start the smart poller."""
@@ -886,6 +938,32 @@ class PortfolioScreen(Screen):
 
     def on_unmount(self) -> None:
         self._stop_polling()
+
+    def action_open_settings(self) -> None:
+        from pm.tui.screens.settings import SettingsScreen
+        self.app.push_screen(SettingsScreen(), callback=self._on_settings_closed)
+
+    def _on_settings_closed(self, result=None) -> None:
+        # Reload accounts and refresh display
+        if _has_credentials():
+            self._show_portfolio_view()
+            self._live_prs.clear()
+            self._start_live_loading()
+        else:
+            self._show_empty_state()
+
+    def action_toggle_demo(self) -> None:
+        # Switch to demo mode from empty state
+        self._show_portfolio_view()
+        from pm.ai.demo import get_demo_projects, DEMO_SUMMARIES, DEMO_SUGGESTIONS
+        projects = get_demo_projects()
+        project_list = self.query_one(ProjectList)
+        project_list.set_projects(projects)
+        self._ai_summaries = dict(DEMO_SUMMARIES)
+        self._ai_suggestions = list(DEMO_SUGGESTIONS)
+        status_bar = self.query_one(StatusBar)
+        status_bar.set_message("Demo mode activated")
+        self.set_timer(3, lambda: status_bar.set_message(""))
 
     def action_help(self) -> None:
         from pm.tui.screens.help import HelpScreen
