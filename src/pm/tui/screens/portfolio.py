@@ -5,7 +5,7 @@ from datetime import datetime
 
 from textual.app import ComposeResult
 from textual.binding import Binding
-from textual.containers import Container, Horizontal
+from textual.containers import Container, VerticalScroll
 from textual.screen import Screen
 from textual.timer import Timer
 from textual.widgets import Static, Footer, Input, Label
@@ -13,8 +13,8 @@ from textual.worker import Worker, WorkerState
 
 from pm.github.pr import EnhancedPR
 from pm.tui.polling import SmartPoller, PollingUpdate
-from pm.tui.widgets.detail_panel import DetailPanel
-from pm.tui.widgets.project_list import ProjectInfo, ProjectList
+from pm.tui.widgets.project_card import ProjectCard
+from pm.tui.widgets.project_list import ProjectInfo
 from pm.tui.widgets.session_list import SessionInfo
 from pm.tui.widgets.status_bar import StatusBar
 
@@ -266,6 +266,29 @@ def _get_credential_token(account: str = "personal") -> str | None:
         return None
 
 
+def _get_account_display_names() -> dict[str, str]:
+    """Get display names for accounts from credentials.yaml."""
+    try:
+        from pm.auth.credentials import load_credentials
+        creds = load_credentials()
+        accounts = creds.get("accounts", {})
+        names = {}
+        idx = 1
+        for account_id, data in accounts.items():
+            display = data.get("display_name", "")
+            username = data.get("username", "")
+            if display:
+                names[account_id] = display
+            elif username:
+                names[account_id] = f"{username}"
+            else:
+                names[account_id] = f"GitHub {idx}"
+            idx += 1
+        return names
+    except Exception:
+        return {}
+
+
 def _fetch_live_projects_and_prs() -> tuple[list[ProjectInfo], dict[str, list[EnhancedPR]]]:
     """Fetch real projects and PRs from GitHub using stored credentials.
 
@@ -463,37 +486,22 @@ class PortfolioScreen(Screen):
         padding: 4 8;
     }
 
-    #portfolio-body {
-        layout: horizontal;
+    #cards-scroll {
         height: 1fr;
+        padding: 1 2;
     }
 
-    #portfolio-body.hidden {
+    #cards-scroll.hidden {
         display: none;
     }
 
-    #left-panel {
-        width: 30%;
-        min-width: 24;
-        border-right: solid $primary 30%;
-        background: $surface-darken-1;
-        padding: 0;
-    }
-
-    #left-panel-title {
-        dock: top;
+    .account-header {
+        width: 100%;
         height: 2;
         padding: 0 1;
-        background: $surface-darken-2;
         color: $primary;
         text-style: bold;
-        border-bottom: solid $surface-lighten-1;
-    }
-
-    #right-panel {
-        width: 70%;
-        background: $surface;
-        padding: 0;
+        margin: 1 1 0 1;
     }
 
     StatusBar {
@@ -533,19 +541,19 @@ class PortfolioScreen(Screen):
         self._live_loading = False
         self._poller: SmartPoller | None = None
         self._poll_timer: Timer | None = None
+        self._cards: list[ProjectCard] = []
+        self._selected_index: int = 0
+        self._projects: list[ProjectInfo] = []
 
     BINDINGS = [
         Binding("q", "quit_app", "Quit"),
         Binding("j,down", "cursor_down", "Down", show=False),
         Binding("k,up", "cursor_up", "Up", show=False),
-        Binding("tab", "next_tab", "Next Tab"),
-        Binding("shift+tab", "prev_tab", "Prev Tab"),
         Binding("enter", "enter_project", "Open"),
         Binding("n", "new_task", "New Task"),
-        Binding("s", "suggest", "Suggest"),
+        Binding("s", "open_settings", "Settings"),
         Binding("r", "refresh", "Refresh"),
         Binding("question_mark", "help", "Help"),
-        Binding("comma", "open_settings", "Settings"),
         Binding("d", "toggle_demo", "Demo", show=False),
     ]
 
@@ -557,21 +565,16 @@ class PortfolioScreen(Screen):
         yield Container(
             Static(
                 "\n\n"
-                "[bold cyan]Welcome to PPM![/bold cyan]\n\n"
+                "[bold cyan]Welcome to PPM! \U0001f44b[/bold cyan]\n\n"
                 "No GitHub accounts connected yet.\n\n"
-                "Press [bold][,][/bold] to open Settings\n"
-                "and connect your first GitHub account.\n\n"
-                "Or press [bold][d][/bold] to view demo data.\n",
+                "Press [bold][s][/bold] to open Settings\n"
+                "and connect your GitHub account.\n\n"
+                "Press [bold][d][/bold] to view demo data.\n",
                 id="empty-state-text",
             ),
             id="empty-state-container",
         )
-        with Horizontal(id="portfolio-body"):
-            with Container(id="left-panel"):
-                yield Static("[bold]Projects[/bold]", id="left-panel-title")
-                yield ProjectList()
-            with Container(id="right-panel"):
-                yield DetailPanel()
+        yield VerticalScroll(id="cards-scroll")
         with Container(id="portfolio-new-task-container"):
             yield Label("[bold cyan]New Task:[/bold cyan] Enter task description for current project")
             yield Input(placeholder="Describe the task...", id="portfolio-new-task-input")
@@ -580,18 +583,16 @@ class PortfolioScreen(Screen):
 
     def on_mount(self) -> None:
         if _is_demo(self):
-            self._show_portfolio_view()
+            self._show_cards_view()
             projects = _get_projects(self)
-            project_list = self.query_one(ProjectList)
-            project_list.set_projects(projects)
+            self._set_projects(projects)
             from pm.ai.demo import DEMO_SUMMARIES, DEMO_SUGGESTIONS
             self._ai_summaries = dict(DEMO_SUMMARIES)
             self._ai_suggestions = list(DEMO_SUGGESTIONS)
         elif _has_credentials():
-            self._show_portfolio_view()
+            self._show_cards_view()
             projects = _get_projects(self)
-            project_list = self.query_one(ProjectList)
-            project_list.set_projects(projects)
+            self._set_projects(projects)
             self._start_live_loading()
         else:
             self._show_empty_state()
@@ -599,17 +600,65 @@ class PortfolioScreen(Screen):
     def _show_empty_state(self) -> None:
         empty = self.query_one("#empty-state-container")
         empty.add_class("visible")
-        body = self.query_one("#portfolio-body")
-        body.add_class("hidden")
+        scroll = self.query_one("#cards-scroll")
+        scroll.add_class("hidden")
 
-    def _show_portfolio_view(self) -> None:
+    def _show_cards_view(self) -> None:
         empty = self.query_one("#empty-state-container")
         empty.remove_class("visible")
-        body = self.query_one("#portfolio-body")
-        body.remove_class("hidden")
+        scroll = self.query_one("#cards-scroll")
+        scroll.remove_class("hidden")
+
+    def _set_projects(self, projects: list[ProjectInfo]) -> None:
+        """Build the card list grouped by account."""
+        self._projects = projects
+        scroll = self.query_one("#cards-scroll", VerticalScroll)
+        scroll.remove_children()
+        self._cards = []
+
+        # Group by account
+        grouped: dict[str, list[ProjectInfo]] = {}
+        for p in projects:
+            grouped.setdefault(p.account, []).append(p)
+
+        for account, account_projects in grouped.items():
+            scroll.mount(
+                Static(f"[bold cyan]\u25bc {account}[/bold cyan]", classes="account-header")
+            )
+            for proj in account_projects:
+                prs = _get_prs(self, proj.name)
+                card = ProjectCard(proj, prs=prs)
+                scroll.mount(card)
+                self._cards.append(card)
+
+        if self._cards:
+            self._selected_index = 0
+            self._update_selection()
+
+    def _update_selection(self) -> None:
+        for i, card in enumerate(self._cards):
+            card.selected = i == self._selected_index
+        # Scroll selected card into view
+        if self._cards and 0 <= self._selected_index < len(self._cards):
+            self._cards[self._selected_index].scroll_visible()
+
+    @property
+    def current_project(self) -> ProjectInfo | None:
+        if self._cards and 0 <= self._selected_index < len(self._cards):
+            return self._cards[self._selected_index].project
+        return None
+
+    def on_project_card_clicked(self, event: ProjectCard.Clicked) -> None:
+        try:
+            idx = self._cards.index(event.card)
+            self._selected_index = idx
+            self._update_selection()
+        except ValueError:
+            pass
+
+    # --- Polling ---
 
     def _start_polling(self) -> None:
-        """Initialize and start the smart poller."""
         if self._poller is not None:
             return
         try:
@@ -622,46 +671,28 @@ class PortfolioScreen(Screen):
             if not has_real_projects(cfg):
                 cfg = None
             self._poller = SmartPoller(credentials=creds, config=cfg)
-            if self._data_has_projects():
-                self._poller._data.projects = list(self._get_current_projects())
+            if self._projects:
+                self._poller._data.projects = list(self._projects)
                 self._poller._data.prs = dict(self._live_prs)
             self._poll_timer = self.set_interval(5, self._poll_tick)
         except Exception:
             pass
 
-    def _data_has_projects(self) -> bool:
-        try:
-            project_list = self.query_one(ProjectList)
-            return bool(project_list._projects)
-        except Exception:
-            return False
-
-    def _get_current_projects(self) -> list[ProjectInfo]:
-        try:
-            project_list = self.query_one(ProjectList)
-            return list(project_list._projects)
-        except Exception:
-            return []
-
     async def _poll_tick(self) -> None:
-        """Called every 5 seconds by the timer to poll GitHub."""
         if self._poller is None or self._live_loading:
             return
         self.run_worker(self._poll_worker, name="poll_tick", thread=True)
 
     async def _poll_worker(self) -> PollingUpdate | None:
-        """Worker to run a single poll tick."""
         if self._poller is None:
             return None
         return await self._poller.tick()
 
     def _apply_polling_update(self, update: PollingUpdate) -> None:
-        """Apply a polling update to the TUI."""
         if update.projects_changed and self._poller:
             self._live_prs = dict(self._poller.data.prs)
             if self._poller.data.projects:
-                project_list = self.query_one(ProjectList)
-                project_list.set_projects(self._poller.data.projects)
+                self._set_projects(self._poller.data.projects)
 
         if update.new_prs:
             names = ", ".join(f"#{p.number}" for p in update.new_prs[:3])
@@ -673,7 +704,6 @@ class PortfolioScreen(Screen):
         self._update_polling_status()
 
     def _update_polling_status(self) -> None:
-        """Update the status bar with polling info."""
         if self._poller is None:
             return
         try:
@@ -683,87 +713,67 @@ class PortfolioScreen(Screen):
             pass
 
     def _stop_polling(self) -> None:
-        """Stop the poller and timer."""
         if self._poll_timer is not None:
             self._poll_timer.stop()
             self._poll_timer = None
         self._poller = None
 
+    # --- Live loading ---
+
     def _start_live_loading(self) -> None:
-        """Start background loading of live GitHub data."""
         self._live_loading = True
         status_bar = self.query_one(StatusBar)
         status_bar.set_message("Fetching live data from GitHub...")
         self.run_worker(self._fetch_live_data_worker, name="live_fetch", thread=True)
 
     async def _fetch_live_data_worker(self) -> tuple[list[ProjectInfo], dict[str, list[EnhancedPR]]]:
-        """Worker to fetch live data from GitHub."""
         return _fetch_live_projects_and_prs()
 
     def _start_background_loading(self) -> None:
-        """Start background loading of data. Uses Workers to avoid blocking."""
         status_bar = self.query_one(StatusBar)
         status_bar.set_message("Loading project data...")
         self.set_timer(1, lambda: status_bar.set_message(""))
 
-    def on_project_list_project_selected(self, event: ProjectList.ProjectSelected) -> None:
-        detail = self.query_one(DetailPanel)
-        detail.set_project(event.project)
-        detail.set_prs(_get_prs(self, event.project.name))
-        detail.set_sessions(_get_sessions(self, event.project.name))
-
-        # Update status panel with AI summary
-        ai_summary = self._ai_summaries.get(event.project.name)
-        if ai_summary:
-            detail.set_ai_summary(ai_summary)
-        detail.set_ai_suggestions(self._ai_suggestions)
-
-    def on_project_list_project_activated(self, event: ProjectList.ProjectActivated) -> None:
-        from pm.tui.screens.project import ProjectScreen
-        prs = _get_prs(self, event.project.name)
-        sessions = _get_sessions(self, event.project.name)
-        self.app.push_screen(ProjectScreen(
-            project=event.project, prs=prs, sessions=sessions,
-        ))
+    # --- Actions ---
 
     def action_quit_app(self) -> None:
         self.app.exit()
 
     def action_cursor_down(self) -> None:
-        self.query_one(ProjectList).action_cursor_down()
+        if self._cards and self._selected_index < len(self._cards) - 1:
+            self._selected_index += 1
+            self._update_selection()
 
     def action_cursor_up(self) -> None:
-        self.query_one(ProjectList).action_cursor_up()
-
-    def action_next_tab(self) -> None:
-        self.query_one(DetailPanel).action_next_tab()
-
-    def action_prev_tab(self) -> None:
-        self.query_one(DetailPanel).action_prev_tab()
+        if self._cards and self._selected_index > 0:
+            self._selected_index -= 1
+            self._update_selection()
 
     def action_enter_project(self) -> None:
-        project_list = self.query_one(ProjectList)
-        if project_list.current_project:
-            project_list.action_activate()
+        if not self._cards or self._selected_index >= len(self._cards):
+            return
+        project = self._cards[self._selected_index].project
+        from pm.tui.screens.project import ProjectScreen
+        prs = _get_prs(self, project.name)
+        sessions = _get_sessions(self, project.name)
+        self.app.push_screen(ProjectScreen(
+            project=project, prs=prs, sessions=sessions,
+        ))
 
     def action_refresh(self) -> None:
         status_bar = self.query_one(StatusBar)
         status_bar.set_message("Refreshing... (cache invalidated)")
 
-        # Invalidate AI summaries
         self._ai_summaries.clear()
         self._ai_suggestions.clear()
         self._live_prs.clear()
 
-        # Re-load AI data
         if _is_demo(self):
             from pm.ai.demo import DEMO_SUMMARIES, DEMO_SUGGESTIONS
             self._ai_summaries = dict(DEMO_SUMMARIES)
             self._ai_suggestions = list(DEMO_SUGGESTIONS)
-            # Reload data
             projects = _get_projects(self)
-            project_list = self.query_one(ProjectList)
-            project_list.set_projects(projects)
+            self._set_projects(projects)
             self.set_timer(2, lambda: status_bar.set_message(""))
         elif _has_credentials():
             if self._poller is not None:
@@ -771,65 +781,79 @@ class PortfolioScreen(Screen):
             else:
                 self._start_live_loading()
         else:
-            # Reload data
             projects = _get_projects(self)
-            project_list = self.query_one(ProjectList)
-            project_list.set_projects(projects)
+            self._set_projects(projects)
             self.set_timer(2, lambda: status_bar.set_message(""))
 
     async def _force_refresh_worker(self) -> PollingUpdate | None:
-        """Worker for force refresh via 'r' key."""
         if self._poller is None:
             return None
         return await self._poller.force_refresh()
 
-    def action_suggest(self) -> None:
-        status_bar = self.query_one(StatusBar)
-        detail = self.query_one(DetailPanel)
+    def action_open_settings(self) -> None:
+        from pm.tui.screens.settings import SettingsScreen
+        self.app.push_screen(SettingsScreen(), callback=self._on_settings_closed)
 
-        if _is_demo(self):
-            from pm.ai.demo import DEMO_SUGGESTIONS
-            self._ai_suggestions = list(DEMO_SUGGESTIONS)
-            detail.set_ai_suggestions(self._ai_suggestions)
-            status_bar.set_message("AI suggestions loaded")
-            self.set_timer(3, lambda: status_bar.set_message(""))
+    def _on_settings_closed(self, result=None) -> None:
+        if _has_credentials():
+            self._show_cards_view()
+            self._live_prs.clear()
+            self._start_live_loading()
         else:
-            if self._loading_suggestions:
-                status_bar.set_message("Already generating suggestions...")
-                return
+            self._show_empty_state()
 
-            self._loading_suggestions = True
-            status_bar.set_message("Generating AI suggestions...")
-            detail.show_suggestions_loading()
+    def action_toggle_demo(self) -> None:
+        self._show_cards_view()
+        from pm.ai.demo import get_demo_projects, DEMO_SUMMARIES, DEMO_SUGGESTIONS
+        projects = get_demo_projects()
+        self._set_projects(projects)
+        self._ai_summaries = dict(DEMO_SUMMARIES)
+        self._ai_suggestions = list(DEMO_SUGGESTIONS)
+        status_bar = self.query_one(StatusBar)
+        status_bar.set_message("Demo mode activated")
+        self.set_timer(3, lambda: status_bar.set_message(""))
 
-            self.run_worker(self._generate_suggestions_worker, thread=True)
+    def action_help(self) -> None:
+        from pm.tui.screens.help import HelpScreen
+        self.app.push_screen(HelpScreen())
 
-    async def _generate_suggestions_worker(self) -> list[dict]:
-        """Worker to generate AI suggestions in background."""
+    def action_new_task(self) -> None:
+        if not self.current_project:
+            status_bar = self.query_one(StatusBar)
+            status_bar.set_message("No project selected")
+            return
+        self._task_input_visible = True
+        container = self.query_one("#portfolio-new-task-container")
+        container.add_class("visible")
         try:
-            from pm.ai.suggest import AISuggestionEngine
-            engine = AISuggestionEngine()
+            self.query_one("#portfolio-new-task-input", Input).focus()
+        except Exception:
+            pass
 
-            projects = _get_projects(self)
-            projects_data = []
-            for p in projects:
-                prs = _get_prs(self, p.name)
-                projects_data.append({
-                    "name": p.name,
-                    "summary": self._ai_summaries.get(p.name, {}),
-                    "open_prs_count": len(prs),
-                    "active_sessions_count": p.active_sessions,
-                    "failing_ci_count": sum(1 for pr in prs if pr.ci_status == "failing"),
-                    "changes_requested_count": sum(1 for pr in prs if pr.review_status == "changes_requested"),
-                })
+    def _hide_task_input(self) -> None:
+        self._task_input_visible = False
+        container = self.query_one("#portfolio-new-task-container")
+        container.remove_class("visible")
 
-            suggestions = engine.generate_suggestions(projects_data)
-            return [s.to_dict() for s in suggestions]
-        except Exception as e:
-            return []
+    def on_input_submitted(self, event: Input.Submitted) -> None:
+        if event.input.id == "portfolio-new-task-input":
+            task_desc = event.value.strip()
+            if task_desc:
+                status_bar = self.query_one(StatusBar)
+                project_name = self.current_project.name if self.current_project else "unknown"
+                status_bar.set_message(f"Creating task for {project_name}: {task_desc}...")
+                event.input.value = ""
+                self._hide_task_input()
+                self.set_timer(
+                    2, lambda: status_bar.set_message(f"Task created: {task_desc}")
+                )
+
+    def on_unmount(self) -> None:
+        self._stop_polling()
+
+    # --- Worker state handling ---
 
     def on_worker_state_changed(self, event: Worker.StateChanged) -> None:
-        # Handle poll tick completion
         if event.worker.name == "poll_tick" and event.state == WorkerState.SUCCESS:
             result = event.worker.result
             if result is not None:
@@ -841,7 +865,6 @@ class PortfolioScreen(Screen):
         if event.worker.name == "poll_tick" and event.state == WorkerState.ERROR:
             return
 
-        # Handle force refresh completion
         if event.worker.name == "force_refresh" and event.state == WorkerState.SUCCESS:
             result = event.worker.result
             if result is not None:
@@ -857,7 +880,6 @@ class PortfolioScreen(Screen):
             self.set_timer(3, lambda: status_bar.set_message(""))
             return
 
-        # Handle live data fetch completion
         if event.worker.name == "live_fetch" and event.state == WorkerState.SUCCESS:
             self._live_loading = False
             result = event.worker.result
@@ -865,8 +887,7 @@ class PortfolioScreen(Screen):
                 projects, prs_map = result
                 if projects:
                     self._live_prs = prs_map
-                    project_list = self.query_one(ProjectList)
-                    project_list.set_projects(projects)
+                    self._set_projects(projects)
                     status_bar = self.query_one(StatusBar)
                     total_prs = sum(len(prs) for prs in prs_map.values())
                     status_bar.set_message(
@@ -894,77 +915,6 @@ class PortfolioScreen(Screen):
             result = event.worker.result
             if result:
                 self._ai_suggestions = result
-                try:
-                    detail = self.query_one(DetailPanel)
-                    detail.set_ai_suggestions(self._ai_suggestions)
-                except Exception:
-                    pass
             status_bar = self.query_one(StatusBar)
             status_bar.set_message("AI suggestions ready")
             self.set_timer(3, lambda: status_bar.set_message(""))
-
-    def action_new_task(self) -> None:
-        project_list = self.query_one(ProjectList)
-        if not project_list.current_project:
-            status_bar = self.query_one(StatusBar)
-            status_bar.set_message("No project selected")
-            return
-        self._task_input_visible = True
-        container = self.query_one("#portfolio-new-task-container")
-        container.add_class("visible")
-        try:
-            self.query_one("#portfolio-new-task-input", Input).focus()
-        except Exception:
-            pass
-
-    def _hide_task_input(self) -> None:
-        self._task_input_visible = False
-        container = self.query_one("#portfolio-new-task-container")
-        container.remove_class("visible")
-
-    def on_input_submitted(self, event: Input.Submitted) -> None:
-        if event.input.id == "portfolio-new-task-input":
-            task_desc = event.value.strip()
-            if task_desc:
-                status_bar = self.query_one(StatusBar)
-                project_list = self.query_one(ProjectList)
-                project_name = project_list.current_project.name if project_list.current_project else "unknown"
-                status_bar.set_message(f"Creating task for {project_name}: {task_desc}...")
-                event.input.value = ""
-                self._hide_task_input()
-                self.set_timer(
-                    2, lambda: status_bar.set_message(f"Task created: {task_desc}")
-                )
-
-    def on_unmount(self) -> None:
-        self._stop_polling()
-
-    def action_open_settings(self) -> None:
-        from pm.tui.screens.settings import SettingsScreen
-        self.app.push_screen(SettingsScreen(), callback=self._on_settings_closed)
-
-    def _on_settings_closed(self, result=None) -> None:
-        # Reload accounts and refresh display
-        if _has_credentials():
-            self._show_portfolio_view()
-            self._live_prs.clear()
-            self._start_live_loading()
-        else:
-            self._show_empty_state()
-
-    def action_toggle_demo(self) -> None:
-        # Switch to demo mode from empty state
-        self._show_portfolio_view()
-        from pm.ai.demo import get_demo_projects, DEMO_SUMMARIES, DEMO_SUGGESTIONS
-        projects = get_demo_projects()
-        project_list = self.query_one(ProjectList)
-        project_list.set_projects(projects)
-        self._ai_summaries = dict(DEMO_SUMMARIES)
-        self._ai_suggestions = list(DEMO_SUGGESTIONS)
-        status_bar = self.query_one(StatusBar)
-        status_bar.set_message("Demo mode activated")
-        self.set_timer(3, lambda: status_bar.set_message(""))
-
-    def action_help(self) -> None:
-        from pm.tui.screens.help import HelpScreen
-        self.app.push_screen(HelpScreen())

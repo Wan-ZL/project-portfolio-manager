@@ -8,7 +8,6 @@ from pm.tui.app import PMApp
 from pm.tui.screens.portfolio import PortfolioScreen
 from pm.tui.screens.project import ProjectScreen
 from pm.tui.screens.task import TaskScreen
-from pm.tui.widgets.project_list import ProjectList
 
 
 @pytest.mark.asyncio

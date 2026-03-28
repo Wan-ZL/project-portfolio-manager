@@ -8,7 +8,8 @@ from pm.github.pr import EnhancedPR
 from pm.tui.app import PMApp
 from pm.tui.screens.portfolio import PortfolioScreen
 from pm.tui.screens.project import ProjectScreen, PRListItem, SessionListItem
-from pm.tui.widgets.project_list import ProjectInfo, ProjectList, ProjectItem
+from pm.tui.widgets.project_card import ProjectCard
+from pm.tui.widgets.project_list import ProjectInfo
 from pm.tui.widgets.session_list import SessionInfo
 
 
@@ -53,9 +54,9 @@ def make_sessions():
 
 
 @pytest.mark.asyncio
-async def test_project_list_has_click_handler():
-    """ProjectItem should have Clicked message class."""
-    assert hasattr(ProjectItem, "Clicked")
+async def test_project_card_has_click_handler():
+    """ProjectCard should have Clicked message class."""
+    assert hasattr(ProjectCard, "Clicked")
 
 
 @pytest.mark.asyncio
@@ -71,12 +72,12 @@ async def test_session_list_item_has_click_handler():
 
 
 @pytest.mark.asyncio
-async def test_portfolio_project_items_exist():
-    """Portfolio should have clickable ProjectItem widgets."""
+async def test_portfolio_project_cards_exist():
+    """Portfolio should have clickable ProjectCard widgets."""
     app = PMApp()
     async with app.run_test() as pilot:
-        items = app.query(ProjectItem)
-        assert len(items) == 4
+        cards = app.query(ProjectCard)
+        assert len(cards) == 4
 
 
 @pytest.mark.asyncio

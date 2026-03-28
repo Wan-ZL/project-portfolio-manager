@@ -65,7 +65,7 @@ def test_prompt_contains_project_data():
     projects = [
         {
             "name": "my-project",
-            "summary": {"one_line_status": "All good"},
+            "summary": {"one_line_status": "All good", "urgency": "high"},
             "open_prs_count": 5,
             "active_sessions_count": 1,
             "failing_ci_count": 2,
@@ -76,6 +76,7 @@ def test_prompt_contains_project_data():
     assert "my-project" in prompt
     assert "Open PRs: 5" in prompt
     assert "PRs with failing CI: 2" in prompt
+    assert "Urgency: high" in prompt
 
 
 def test_prompt_multiple_projects():

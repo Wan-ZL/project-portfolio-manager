@@ -1,4 +1,4 @@
-/* Portfolio view specific styles */
+/* Portfolio view — card-based layout */
 
 PortfolioScreen {
     layout: vertical;
@@ -15,35 +15,18 @@ PortfolioScreen {
     padding: 0 2;
 }
 
-#portfolio-body {
-    layout: horizontal;
+#cards-scroll {
     height: 1fr;
+    padding: 1 2;
 }
 
-/* Left panel — project list */
-#left-panel {
-    width: 30%;
-    min-width: 24;
-    border-right: solid $primary 30%;
-    background: $surface-darken-1;
-    padding: 0;
-}
-
-#left-panel-title {
-    dock: top;
+.account-header {
+    width: 100%;
     height: 2;
     padding: 0 1;
-    background: $surface-darken-2;
     color: $primary;
     text-style: bold;
-    border-bottom: solid $surface-lighten-1;
-}
-
-/* Right panel — detail view */
-#right-panel {
-    width: 70%;
-    background: $surface;
-    padding: 0;
+    margin: 1 1 0 1;
 }
 
 /* Status bar */

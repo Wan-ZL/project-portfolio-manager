@@ -25,6 +25,13 @@ SettingsScreen {
     text-style: bold;
     color: $primary;
     padding: 1 0;
+    height: auto;
+}
+
+.settings-separator {
+    height: 1;
+    color: $text-muted;
+    padding: 0;
 }
 
 #accounts-list {
@@ -39,6 +46,14 @@ AccountItem {
     border: round $primary 30%;
 }
 
+AccountItem:hover {
+    background: $surface-lighten-1;
+}
+
+#add-account-btn {
+    margin: 1 1;
+}
+
 #token-input-container {
     display: none;
     padding: 1 2;
@@ -50,4 +65,105 @@ AccountItem {
 
 #token-input-container.visible {
     display: block;
+}
+
+#token-input {
+    width: 100%;
+    margin: 1 0;
+}
+
+#token-buttons {
+    height: 3;
+}
+
+#token-buttons Button {
+    margin: 0 1 0 0;
+}
+
+#token-status {
+    height: auto;
+    padding: 0 0 1 0;
+}
+
+#no-accounts-hint {
+    text-align: center;
+    color: $text-muted;
+    padding: 2;
+    height: auto;
+}
+
+/* General settings */
+
+#general-settings-container {
+    height: auto;
+    padding: 0 1;
+}
+
+#general-settings-content {
+    height: auto;
+    padding: 0 0 1 0;
+}
+
+.setting-edit-row {
+    height: 3;
+    padding: 0 0;
+}
+
+.setting-edit-row Input {
+    width: 30;
+}
+
+.setting-edit-row Button {
+    margin: 0 0 0 1;
+}
+
+.setting-label {
+    width: 20;
+    height: 1;
+    padding: 1 0 0 0;
+}
+
+/* Overlay settings */
+
+#overlay-settings-container {
+    height: auto;
+    padding: 0 1;
+}
+
+.overlay-row {
+    height: 3;
+    padding: 0 0;
+}
+
+.overlay-row Input {
+    width: 10;
+}
+
+.overlay-row Select {
+    width: 20;
+}
+
+.overlay-row Button {
+    margin: 0 0 0 1;
+}
+
+/* Confirm remove */
+
+#confirm-remove-row {
+    height: 3;
+    padding: 1 2;
+}
+
+#confirm-remove-row Button {
+    margin: 0 1 0 0;
+}
+
+/* Footer hint */
+
+#settings-footer-hint {
+    dock: bottom;
+    height: 1;
+    background: $primary-background-darken-2;
+    color: $text-muted;
+    padding: 0 1;
 }

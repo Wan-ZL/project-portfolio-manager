@@ -4,7 +4,6 @@ from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal, VerticalScroll
 from textual.events import Click
-from textual.message import Message
 from textual.reactive import reactive
 from textual.screen import Screen
 from textual.widgets import Button, Footer, Static
@@ -29,10 +28,12 @@ class RepoItem(Static):
 
     checked = reactive(False)
 
-    def __init__(self, repo_name: str, is_private: bool, checked: bool = False, **kwargs):
+    def __init__(self, repo_name: str, is_private: bool,
+                 open_prs: int = 0, checked: bool = False, **kwargs):
         super().__init__(**kwargs)
         self.repo_name = repo_name
         self.is_private = is_private
+        self.open_prs = open_prs
         self.checked = checked
 
     def on_click(self, event: Click) -> None:
@@ -41,7 +42,10 @@ class RepoItem(Static):
     def render(self) -> str:
         check = "[green]X[/green]" if self.checked else "[ ]"
         visibility = "[dim](private)[/dim]" if self.is_private else "[dim](public)[/dim]"
-        return f"  {check} {self.repo_name}  {visibility}"
+        pr_info = ""
+        if self.open_prs > 0:
+            pr_info = f"  [yellow]{self.open_prs} PRs[/yellow]"
+        return f"  {check} {self.repo_name}  {visibility}{pr_info}"
 
 
 class RepoSelectorScreen(Screen):
@@ -83,12 +87,23 @@ class RepoSelectorScreen(Screen):
         content-align: center middle;
     }
 
+    #repo-actions Button {
+        margin: 0 1;
+    }
+
     #repo-hint {
         dock: bottom;
         height: 1;
         background: $primary-background-darken-2;
         color: $text-muted;
         padding: 0 1;
+    }
+
+    #repo-count-status {
+        dock: bottom;
+        height: 1;
+        padding: 0 2;
+        color: $text-muted;
     }
     """
 
@@ -123,6 +138,7 @@ class RepoSelectorScreen(Screen):
                 "[bold yellow]Loading repositories from GitHub...[/bold yellow]",
                 id="repo-loading",
             )
+        yield Static("", id="repo-count-status")
         with Horizontal(id="repo-actions"):
             yield Button("Save Selection", id="save-btn", variant="primary")
             yield Button("Cancel", id="cancel-btn")
@@ -169,18 +185,33 @@ class RepoSelectorScreen(Screen):
         for repo in self._repos:
             full_name = repo.get("full_name", "")
             is_private = repo.get("private", False)
+            open_prs = repo.get("open_issues_count", 0)
             is_checked = full_name in self._selected_repos
-            item = RepoItem(full_name, is_private, checked=is_checked)
+            item = RepoItem(full_name, is_private, open_prs=open_prs, checked=is_checked)
             body.mount(item)
             self._repo_items.append(item)
 
         if self._repo_items:
             self._cursor_index = 0
             self._update_cursor()
+            self._update_count_status()
 
     def _update_cursor(self) -> None:
         for i, item in enumerate(self._repo_items):
             item.set_class(i == self._cursor_index, "selected-item")
+
+    def _update_count_status(self) -> None:
+        selected = sum(1 for item in self._repo_items if item.checked)
+        total = len(self._repo_items)
+        try:
+            self.query_one("#repo-count-status", Static).update(
+                f"  {selected}/{total} repos selected"
+            )
+        except Exception:
+            pass
+
+    def watch_checked(self) -> None:
+        self._update_count_status()
 
     def action_cursor_down(self) -> None:
         if self._repo_items and self._cursor_index < len(self._repo_items) - 1:
@@ -196,14 +227,17 @@ class RepoSelectorScreen(Screen):
         if self._repo_items and 0 <= self._cursor_index < len(self._repo_items):
             item = self._repo_items[self._cursor_index]
             item.checked = not item.checked
+            self._update_count_status()
 
     def action_select_all(self) -> None:
         for item in self._repo_items:
             item.checked = True
+        self._update_count_status()
 
     def action_select_none(self) -> None:
         for item in self._repo_items:
             item.checked = False
+        self._update_count_status()
 
     def action_save(self) -> None:
         self._do_save()

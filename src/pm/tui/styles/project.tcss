@@ -1,4 +1,4 @@
-/* Project view specific styles */
+/* Project view - single scrollable page with sections */
 
 ProjectScreen {
     layout: vertical;
@@ -15,70 +15,101 @@ ProjectScreen {
     padding: 0 2;
 }
 
-#project-body {
-    layout: horizontal;
+#project-scroll {
     height: 1fr;
+    scrollbar-color: $primary 50%;
+    scrollbar-color-hover: $primary 80%;
 }
 
-/* Left panel — repos, PRs, sessions, issues */
-#project-left-panel {
-    width: 35%;
-    min-width: 28;
-    border-right: solid $primary 30%;
+/* Welcome Back section */
+WelcomeBackSection {
+    height: auto;
+    padding: 1 2;
+    margin: 1 2 0 2;
+    border: round $primary 60%;
     background: $surface-darken-1;
-    padding: 0;
 }
 
-#project-left-title {
-    dock: top;
+WelcomeBackSection.dismissed {
+    display: none;
+}
+
+/* Section headers */
+SectionHeader {
     height: 2;
-    padding: 0 1;
-    background: $surface-darken-2;
+    padding: 0 2;
     color: $primary;
     text-style: bold;
-    border-bottom: solid $surface-lighten-1;
+    border-bottom: solid $primary 30%;
+    margin: 1 0 0 0;
 }
 
-/* Right panel — tabbed detail */
-#project-right-panel {
-    width: 65%;
-    background: $surface;
-    padding: 0;
+/* PR items */
+PRListItem {
+    height: auto;
+    min-height: 3;
+    padding: 0 2;
 }
 
-/* Section headers inside left panel */
-.section-header {
-    height: 2;
-    padding: 0 1;
-    color: $primary;
-    text-style: bold;
-    background: $surface-darken-2;
-}
-
-/* PR items in left panel */
-.project-pr-item {
-    height: 2;
-    padding: 0 1;
-}
-
-.project-pr-item:hover {
-    background: $surface-lighten-1;
-}
-
-.project-pr-item.selected {
+PRListItem.selected {
     background: $accent 30%;
 }
 
-/* Session items in left panel */
-.project-session-item {
-    height: 2;
-    padding: 0 1;
-}
-
-.project-session-item:hover {
+PRListItem:hover {
     background: $surface-lighten-1;
 }
 
-.project-session-item.selected {
+/* Session items */
+SessionListItem {
+    height: 2;
+    padding: 0 2;
+}
+
+SessionListItem.selected {
     background: $accent 30%;
+}
+
+SessionListItem:hover {
+    background: $surface-lighten-1;
+}
+
+/* Activity timeline */
+ActivityTimeline {
+    height: auto;
+    padding: 1 2;
+}
+
+/* Instructions */
+#instructions-section {
+    height: auto;
+    padding: 1 2;
+    margin: 0 2;
+    background: $surface-darken-1;
+}
+
+/* New task input */
+#new-task-container {
+    dock: bottom;
+    height: auto;
+    max-height: 5;
+    background: $surface-darken-2;
+    padding: 0 1;
+    display: none;
+}
+
+#new-task-container.visible {
+    display: block;
+}
+
+#new-task-input {
+    width: 100%;
+}
+
+/* Status bar override */
+StatusBar {
+    dock: bottom;
+    height: 1;
+    background: $primary-background-darken-2;
+    color: $text;
+    padding: 0 1;
 }

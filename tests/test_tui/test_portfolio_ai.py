@@ -4,8 +4,7 @@ import pytest
 
 from pm.tui.app import PMApp
 from pm.tui.screens.portfolio import PortfolioScreen
-from pm.tui.widgets.detail_panel import DetailPanel, StatusPanel
-from pm.tui.widgets.project_list import ProjectList
+from pm.tui.widgets.project_card import ProjectCard
 
 
 # --- Demo mode tests ---
@@ -22,25 +21,26 @@ async def test_demo_mode_launches():
 async def test_demo_mode_has_projects():
     app = PMApp(demo=True)
     async with app.run_test() as pilot:
-        project_list = app.query_one(ProjectList)
-        assert len(project_list._items) == 4
+        cards = app.query(ProjectCard)
+        assert len(cards) == 4
 
 
 @pytest.mark.asyncio
 async def test_demo_mode_projects_have_summaries():
     app = PMApp(demo=True)
     async with app.run_test() as pilot:
-        project_list = app.query_one(ProjectList)
-        for item in project_list._items:
-            assert item.project.summary != ""
+        cards = app.query(ProjectCard)
+        for card in cards:
+            assert card.project.summary != ""
 
 
 @pytest.mark.asyncio
 async def test_demo_mode_first_project_name():
     app = PMApp(demo=True)
     async with app.run_test() as pilot:
-        project_list = app.query_one(ProjectList)
-        assert project_list.current_project.name == "401K Website"
+        screen = app.screen
+        assert isinstance(screen, PortfolioScreen)
+        assert screen.current_project.name == "401K Website"
 
 
 @pytest.mark.asyncio
@@ -51,73 +51,52 @@ async def test_non_demo_mode_launches():
         assert isinstance(app.screen, PortfolioScreen)
 
 
-# --- AI Summary in detail panel ---
+# --- AI Summary in cards ---
 
 @pytest.mark.asyncio
-async def test_detail_panel_has_status_panel():
+async def test_cards_render_with_summaries():
     app = PMApp(demo=True)
     async with app.run_test() as pilot:
-        detail = app.query_one(DetailPanel)
-        assert detail is not None
-        status_panels = app.query(StatusPanel)
-        assert len(status_panels) == 1
+        cards = app.query(ProjectCard)
+        assert len(cards) == 4
+        # Each card should have project info
+        for card in cards:
+            assert card.project.name != ""
 
 
 @pytest.mark.asyncio
-async def test_ai_summary_appears_in_detail():
-    app = PMApp(demo=True)
-    async with app.run_test() as pilot:
-        # The first project should be auto-selected and detail populated
-        detail = app.query_one(DetailPanel)
-        assert detail is not None
-
-
-@pytest.mark.asyncio
-async def test_selecting_project_updates_detail():
-    app = PMApp(demo=True)
-    async with app.run_test() as pilot:
-        # Navigate to second project
-        await pilot.press("j")
-        await pilot.pause()
-
-        project_list = app.query_one(ProjectList)
-        assert project_list.current_project.name == "Side Project"
-
-
-@pytest.mark.asyncio
-async def test_navigating_projects_updates_ai_summary():
-    app = PMApp(demo=True)
-    async with app.run_test() as pilot:
-        # Navigate through all projects
-        for i in range(3):
-            await pilot.press("j")
-            await pilot.pause()
-
-        project_list = app.query_one(ProjectList)
-        assert project_list.current_project.name == "Internal Tool"
-
-
-# --- AI Suggestion ('s' key) ---
-
-@pytest.mark.asyncio
-async def test_suggest_key_binding():
-    app = PMApp(demo=True)
-    async with app.run_test() as pilot:
-        await pilot.press("s")
-        await pilot.pause()
-        # Should not crash, suggestions should load
-
-
-@pytest.mark.asyncio
-async def test_suggest_loads_in_demo_mode():
+async def test_ai_summary_loaded_in_demo():
     app = PMApp(demo=True)
     async with app.run_test() as pilot:
         screen = app.screen
         assert isinstance(screen, PortfolioScreen)
-        await pilot.press("s")
+        # Demo summaries should be populated
+        assert len(screen._ai_summaries) > 0
+
+
+@pytest.mark.asyncio
+async def test_selecting_project_changes_selection():
+    app = PMApp(demo=True)
+    async with app.run_test() as pilot:
+        screen = app.screen
+        assert isinstance(screen, PortfolioScreen)
+        # Navigate to second project
+        await pilot.press("j")
         await pilot.pause()
-        # Suggestions should be loaded
-        assert len(screen._ai_suggestions) > 0
+        assert screen.current_project.name == "Side Project"
+
+
+@pytest.mark.asyncio
+async def test_navigating_projects_updates_selection():
+    app = PMApp(demo=True)
+    async with app.run_test() as pilot:
+        screen = app.screen
+        assert isinstance(screen, PortfolioScreen)
+        # Navigate through all projects
+        for i in range(3):
+            await pilot.press("j")
+            await pilot.pause()
+        assert screen.current_project.name == "Internal Tool"
 
 
 # --- Refresh ('r' key) ---
@@ -149,29 +128,6 @@ async def test_refresh_reloads_demo_data():
         assert len(screen._ai_summaries) > 0
 
 
-# --- Tab switching with AI content ---
-
-@pytest.mark.asyncio
-async def test_tab_switching_with_ai():
-    app = PMApp(demo=True)
-    async with app.run_test() as pilot:
-        # Switch tabs
-        await pilot.press("tab")
-        await pilot.pause()
-        await pilot.press("tab")
-        await pilot.pause()
-        # Should not crash
-
-
-@pytest.mark.asyncio
-async def test_status_tab_shows_ai_content():
-    app = PMApp(demo=True)
-    async with app.run_test() as pilot:
-        # Status tab is the default, just verify it renders
-        status_panels = app.query(StatusPanel)
-        assert len(status_panels) == 1
-
-
 # --- Navigation from demo mode ---
 
 @pytest.mark.asyncio
@@ -198,65 +154,40 @@ async def test_demo_mode_enter_and_back():
         assert isinstance(app.screen, PortfolioScreen)
 
 
-# --- Help key with AI suggestions info ---
+# --- Help key ---
 
 @pytest.mark.asyncio
-async def test_help_key_shows_suggest_info():
+async def test_help_key_shows_help():
     app = PMApp(demo=True)
     async with app.run_test() as pilot:
         await pilot.press("question_mark")
         await pilot.pause()
-        # Should show help text including 's' for suggest
+        # Should show help screen
 
 
-# --- Loading indicator ---
-
-@pytest.mark.asyncio
-async def test_detail_panel_show_loading():
-    app = PMApp(demo=True)
-    async with app.run_test() as pilot:
-        detail = app.query_one(DetailPanel)
-        detail.show_summary_loading()
-        await pilot.pause()
-        # Should not crash
-
+# --- Card widget tests ---
 
 @pytest.mark.asyncio
-async def test_detail_panel_show_suggestions_loading():
+async def test_cards_have_pr_data():
     app = PMApp(demo=True)
     async with app.run_test() as pilot:
-        detail = app.query_one(DetailPanel)
-        detail.show_suggestions_loading()
-        await pilot.pause()
-        # Should not crash
-
-
-# --- StatusPanel direct tests ---
-
-@pytest.mark.asyncio
-async def test_status_panel_set_ai_summary():
-    app = PMApp(demo=True)
-    async with app.run_test() as pilot:
-        status_panel = app.query_one(StatusPanel)
-        summary = {
-            "one_line_status": "Test status",
-            "key_progress": ["Progress 1"],
-            "issues_needing_attention": ["Issue 1"],
-            "suggested_next_steps": ["Step 1"],
-        }
-        status_panel.set_ai_summary(summary)
-        await pilot.pause()
-        # Should not crash
+        cards = app.query(ProjectCard)
+        # 401K Website card should have PRs
+        first_card = cards[0]
+        assert len(first_card._prs) > 0
 
 
 @pytest.mark.asyncio
-async def test_status_panel_set_suggestions():
+async def test_card_selection_visual():
     app = PMApp(demo=True)
     async with app.run_test() as pilot:
-        status_panel = app.query_one(StatusPanel)
-        suggestions = [
-            {"priority": "high", "project": "proj", "action": "Fix", "reason": "Broken"},
-        ]
-        status_panel.set_ai_suggestions(suggestions)
+        cards = list(app.query(ProjectCard))
+        # First card should be selected
+        assert cards[0].selected is True
+        assert cards[1].selected is False
+
+        # Navigate down
+        await pilot.press("j")
         await pilot.pause()
-        # Should not crash
+        assert cards[0].selected is False
+        assert cards[1].selected is True

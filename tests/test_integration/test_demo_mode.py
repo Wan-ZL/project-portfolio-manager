@@ -8,10 +8,9 @@ import pytest
 from pm.tui.app import PMApp
 from pm.tui.screens.help import HelpScreen
 from pm.tui.screens.portfolio import PortfolioScreen
-from pm.tui.screens.project import ProjectScreen, PRListItem, SessionListItem, InfoTab
+from pm.tui.screens.project import ProjectScreen, PRListItem, SessionListItem
 from pm.tui.screens.task import TaskScreen
-from pm.tui.widgets.detail_panel import DetailPanel, StatusPanel
-from pm.tui.widgets.project_list import ProjectList
+from pm.tui.widgets.project_card import ProjectCard
 from pm.tui.widgets.session_list import SessionInfo
 from pm.tui.widgets.status_bar import StatusBar
 
@@ -26,11 +25,11 @@ async def test_demo_launches_portfolio():
 
 @pytest.mark.asyncio
 async def test_demo_has_four_projects():
-    """Demo mode should have 4 projects loaded."""
+    """Demo mode should have 4 project cards loaded."""
     app = PMApp(demo=True)
     async with app.run_test() as pilot:
-        project_list = app.query_one(ProjectList)
-        assert len(project_list._items) == 4
+        cards = app.query(ProjectCard)
+        assert len(cards) == 4
 
 
 @pytest.mark.asyncio
@@ -38,8 +37,9 @@ async def test_demo_first_project_is_401k():
     """First project should be 401K Website."""
     app = PMApp(demo=True)
     async with app.run_test() as pilot:
-        project_list = app.query_one(ProjectList)
-        assert project_list.current_project.name == "401K Website"
+        screen = app.screen
+        assert isinstance(screen, PortfolioScreen)
+        assert screen.current_project.name == "401K Website"
 
 
 @pytest.mark.asyncio
@@ -68,19 +68,20 @@ async def test_demo_navigate_down_through_projects():
     """Navigate down through all projects."""
     app = PMApp(demo=True)
     async with app.run_test() as pilot:
-        project_list = app.query_one(ProjectList)
+        screen = app.screen
+        assert isinstance(screen, PortfolioScreen)
 
         await pilot.press("j")
-        assert project_list.selected_index == 1
-        assert project_list.current_project.name == "Side Project"
+        assert screen._selected_index == 1
+        assert screen.current_project.name == "Side Project"
 
         await pilot.press("j")
-        assert project_list.selected_index == 2
-        assert project_list.current_project.name == "FAA Project"
+        assert screen._selected_index == 2
+        assert screen.current_project.name == "FAA Project"
 
         await pilot.press("j")
-        assert project_list.selected_index == 3
-        assert project_list.current_project.name == "Internal Tool"
+        assert screen._selected_index == 3
+        assert screen.current_project.name == "Internal Tool"
 
 
 @pytest.mark.asyncio
@@ -208,17 +209,6 @@ async def test_demo_full_navigation_flow():
 
 
 @pytest.mark.asyncio
-async def test_demo_tab_switching():
-    """Tab switching should work in portfolio view."""
-    app = PMApp(demo=True)
-    async with app.run_test() as pilot:
-        # Should not crash
-        await pilot.press("tab")
-        await pilot.press("tab")
-        await pilot.press("shift+tab")
-
-
-@pytest.mark.asyncio
 async def test_demo_help_overlay():
     """? should open help overlay in demo mode."""
     app = PMApp(demo=True)
@@ -233,15 +223,15 @@ async def test_demo_help_overlay():
 
 
 @pytest.mark.asyncio
-async def test_demo_detail_panel_shows_summary():
-    """Detail panel should show AI summary content."""
+async def test_demo_cards_show_project_info():
+    """Cards should show project information."""
     app = PMApp(demo=True)
     async with app.run_test() as pilot:
-        detail = app.query_one(DetailPanel)
-        assert detail is not None
-        # StatusPanel should exist
-        status_panel = app.query_one(StatusPanel)
-        assert status_panel is not None
+        cards = app.query(ProjectCard)
+        assert len(cards) == 4
+        # Each card should have a project with a name
+        for card in cards:
+            assert card.project.name != ""
 
 
 @pytest.mark.asyncio
@@ -252,16 +242,6 @@ async def test_demo_refresh_works():
         await pilot.press("r")
         await pilot.pause()
         # Should still be on portfolio
-        assert isinstance(app.screen, PortfolioScreen)
-
-
-@pytest.mark.asyncio
-async def test_demo_suggest_works():
-    """Suggest key should load suggestions."""
-    app = PMApp(demo=True)
-    async with app.run_test() as pilot:
-        await pilot.press("s")
-        await pilot.pause()
         assert isinstance(app.screen, PortfolioScreen)
 
 
@@ -315,16 +295,15 @@ async def test_demo_views_render_correctly():
     """All views should render without exceptions."""
     app = PMApp(demo=True)
     async with app.run_test() as pilot:
-        # Portfolio renders
-        assert app.query_one(ProjectList) is not None
-        assert app.query_one(DetailPanel) is not None
+        # Portfolio renders with cards
+        cards = app.query(ProjectCard)
+        assert len(cards) == 4
         assert app.query_one(StatusBar) is not None
 
         # Project renders
         await pilot.press("enter")
         await pilot.pause()
         assert app.query_one("#project-title") is not None
-        assert app.query_one(InfoTab) is not None
         assert app.query_one(StatusBar) is not None
 
         # Back to portfolio

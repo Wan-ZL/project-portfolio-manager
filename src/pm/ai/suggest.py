@@ -42,6 +42,7 @@ def build_suggest_prompt(projects_data: list[dict]) -> str:
         name = proj.get("name", "unknown")
         summary = proj.get("summary", {})
         one_line = summary.get("one_line_status", "No status") if isinstance(summary, dict) else str(summary)
+        urgency = summary.get("urgency", "unknown") if isinstance(summary, dict) else "unknown"
         prs_count = proj.get("open_prs_count", 0)
         sessions_count = proj.get("active_sessions_count", 0)
         failing_ci = proj.get("failing_ci_count", 0)
@@ -50,39 +51,44 @@ def build_suggest_prompt(projects_data: list[dict]) -> str:
         projects_text += f"""
 ### {name}
 - Status: {one_line}
+- Urgency: {urgency}
 - Open PRs: {prs_count}
 - Active sessions: {sessions_count}
 - PRs with failing CI: {failing_ci}
 - PRs with changes requested: {changes_requested}
 """
 
-    prompt = f"""You are an AI assistant helping a developer prioritize work across multiple projects.
-Based on the following project summaries, generate a prioritized list of suggested next actions.
+    prompt = f"""你是一个帮开发者排优先级的助理。根据以下项目状态，生成具体的 next actions。
+用中文 + English 技术词混合风格。
 
 ## Projects
 {projects_text}
 
 ## Output Format
 
-Please respond in the following JSON format (use mixed Chinese + English technical terms):
+Respond with ONLY this JSON (no code blocks, no extra text):
 
 {{
   "suggestions": [
     {{
-      "priority": "high",
+      "priority": "high/medium/low",
       "project": "project-name",
-      "action": "What to do",
-      "reason": "Why this is important"
+      "action": "具体要做什么 (必须提到 PR 号/feature 名/具体数字)",
+      "reason": "为什么现在要做这个 (说清楚 impact 和 urgency)"
     }}
   ]
 }}
 
-Prioritization rules:
-1. HIGH: Failing CI, unresolved review comments, blocked PRs
-2. MEDIUM: PRs ready to merge, stale PRs, incomplete tasks
-3. LOW: Nice-to-haves, cleanup, docs updates
+Priority rules:
+1. HIGH: CI failing (blocks merge), unresolved review comments (blocks others), PRs open > 5 days
+2. MEDIUM: PRs approved + CI green (free wins to merge), stale PRs, incomplete tasks
+3. LOW: Docs, cleanup, nice-to-haves
 
-Generate 3-6 suggestions, ordered by priority. Be specific and actionable.
+Rules:
+- Generate 3-6 suggestions, sorted by urgency (high first)
+- Each action must be specific enough to act on immediately
+- Each reason must explain the concrete impact of doing/not doing it
+- 不要说 "建议关注" 或 "需要注意" — 直接说做什么
 """
     return prompt
 

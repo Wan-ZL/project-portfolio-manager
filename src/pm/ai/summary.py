@@ -10,6 +10,36 @@ from typing import Optional
 
 logger = logging.getLogger(__name__)
 
+SUMMARY_SYSTEM_PROMPT = """你是一个简洁的工程状态助理。用中文 + English 技术词混合风格，为一个同时管理多个项目的开发者生成项目状态。
+
+输出 JSON 格式:
+{
+  "one_line_status": "一句话状态 (必须有具体事实，不能说废话)",
+  "key_progress": ["最近的关键进展列表"],
+  "needs_attention": ["需要注意/行动的事项"],
+  "suggested_next_steps": ["建议的下一步"],
+  "urgency": "high/medium/low/idle"
+}
+
+一句话状态的规则:
+- 必须提到具体事实 (PR 号码, feature 名, 数字)
+- 必须指出需要注意什么或什么变了
+- 格式: [最近发生了什么] + [现在需要做什么]
+- 如果没什么活动: "闲置 X 天 — 上次活动是 [具体事情]"
+
+绝对不能生成的废话:
+- "项目进展顺利，active development 在持续"
+- "有几个 PR 在 review 中"
+- "团队在积极开发中"
+- "项目状态良好"
+
+好的例子:
+- "Auth refactor 已 merge (PR #42); 2 个 PR CI failing 需要修"
+- "闲置 12 天 — 上次是 merge payment integration"
+- "3 个 PR 等你 review, 最老的 (#89) 已经开了 6 天"
+- "所有 4 个 PR CI 通过 + approved — 可以 merge 了"
+"""
+
 # API key file path (with invisible character in filename, matching user's actual path)
 API_KEY_FILE = Path("/Users/zelin/Downloads/API Key/\u200eanthropic-api-key.txt")
 
@@ -35,7 +65,59 @@ def compute_input_hash(input_data: dict) -> str:
     return hashlib.sha256(serialized.encode()).hexdigest()[:16]
 
 
-def build_summary_prompt(project_name: str, input_data: dict) -> str:
+def _get_last_session(project_name: str, db) -> Optional[dict]:
+    """Get info about the last agent session for a project."""
+    if not db:
+        return None
+    try:
+        sessions = db.get_sessions_by_project(project_name)
+        if not sessions:
+            return None
+        sorted_sessions = sorted(
+            sessions,
+            key=lambda s: s.updated_at or s.created_at or datetime.min,
+            reverse=True,
+        )
+        last = sorted_sessions[0]
+        return {
+            "task_description": last.task_description or "unknown task",
+            "status": last.status or "unknown",
+            "updated_at": last.updated_at or last.created_at,
+        }
+    except Exception:
+        return None
+
+
+def _get_days_since_last_activity(project_name: str, db) -> Optional[int]:
+    """Calculate days since last activity from sessions/commits."""
+    if not db:
+        return None
+    try:
+        sessions = db.get_sessions_by_project(project_name)
+        if not sessions:
+            return None
+        latest_time = max(
+            (s.updated_at or s.created_at or datetime.min for s in sessions),
+            default=None,
+        )
+        if latest_time and latest_time != datetime.min:
+            delta = datetime.now() - latest_time
+            return delta.days
+        return None
+    except Exception:
+        return None
+
+
+def _count_other_commits(project_name: str) -> Optional[int]:
+    """Placeholder for counting commits by others since last activity.
+
+    Real implementation would use git log. Returns None to indicate
+    the data is not available.
+    """
+    return None
+
+
+def build_summary_prompt(project_name: str, input_data: dict, db=None) -> str:
     """Build the prompt for AI summary generation."""
     recent_commits = input_data.get("recent_commits", [])
     open_prs = input_data.get("open_prs", [])
@@ -72,10 +154,30 @@ def build_summary_prompt(project_name: str, input_data: dict) -> str:
     else:
         issues_text = "  (no open issues)"
 
-    prompt = f"""You are an AI assistant helping a developer manage multiple projects.
-Analyze the following data for the project "{project_name}" and generate a structured summary.
+    # Build activity context
+    activity_section = ""
+    last_session = _get_last_session(project_name, db)
+    days_since = _get_days_since_last_activity(project_name, db)
+    other_commits = _count_other_commits(project_name)
 
-## Project Data
+    activity_lines = []
+    if last_session:
+        activity_lines.append(
+            f"Your last agent session: {last_session['task_description']} ({last_session['status']})"
+        )
+    if days_since is not None:
+        activity_lines.append(f"Days since your last activity: {days_since}")
+    if other_commits is not None:
+        activity_lines.append(f"Commits by others since your last activity: {other_commits}")
+
+    if activity_lines:
+        activity_section = "\n### Your Recent Activity\n" + "\n".join(f"  - {line}" for line in activity_lines)
+
+    other_activity_section = ""
+    if other_commits is not None:
+        other_activity_section = f"\n### Activity by Others\n  - Commits by others since your last activity: {other_commits}"
+
+    prompt = f"""## Project Data for "{project_name}"
 
 ### Recent Commits (last 7 days):
 {commits_text}
@@ -87,29 +189,21 @@ Analyze the following data for the project "{project_name}" and generate a struc
 {issues_text}
 
 ### CI Status: {ci_status}
-
+{activity_section}
+{other_activity_section}
 ### Project Instructions:
 {instructions or '(none)'}
 
-## Output Format
-
-Please respond in the following JSON format (use mixed Chinese + English technical terms, the user prefers this style):
-
-{{
-  "one_line_status": "A single sentence summarizing the project's current state",
-  "key_progress": ["Progress item 1", "Progress item 2"],
-  "issues_needing_attention": ["Issue 1", "Issue 2"],
-  "suggested_next_steps": ["Step 1", "Step 2"]
-}}
-
-Keep it concise but informative. Use technical terms in English but explanatory text can mix Chinese and English naturally.
-"""
+Respond with ONLY the JSON object, no markdown code blocks, no extra text."""
     return prompt
 
 
 def parse_summary_response(response_text: str) -> dict:
-    """Parse the AI response into a structured summary dict."""
-    # Try to extract JSON from the response
+    """Parse the AI response into a structured summary dict.
+
+    Handles both new format (needs_attention, urgency) and legacy format
+    (issues_needing_attention) for backward compatibility with cached summaries.
+    """
     text = response_text.strip()
 
     # Try to find JSON block in markdown code block
@@ -124,19 +218,26 @@ def parse_summary_response(response_text: str) -> dict:
 
     try:
         data = json.loads(text)
+        # Support both new "needs_attention" and legacy "issues_needing_attention"
+        needs_attention = (
+            data.get("needs_attention")
+            or data.get("issues_needing_attention")
+            or []
+        )
         return {
             "one_line_status": data.get("one_line_status", ""),
             "key_progress": data.get("key_progress", []),
-            "issues_needing_attention": data.get("issues_needing_attention", []),
+            "needs_attention": needs_attention,
             "suggested_next_steps": data.get("suggested_next_steps", []),
+            "urgency": data.get("urgency", "medium"),
         }
     except (json.JSONDecodeError, ValueError):
-        # If JSON parsing fails, return the raw text as one_line_status
         return {
             "one_line_status": text[:200],
             "key_progress": [],
-            "issues_needing_attention": [],
+            "needs_attention": [],
             "suggested_next_steps": [],
+            "urgency": "medium",
         }
 
 
@@ -144,28 +245,47 @@ def format_summary_for_display(summary: dict) -> str:
     """Format a parsed summary dict into Rich markup for TUI display."""
     lines = []
 
+    urgency = summary.get("urgency", "medium")
+    urgency_colors = {
+        "high": "red",
+        "medium": "yellow",
+        "low": "green",
+        "idle": "dim",
+    }
+    urgency_labels = {
+        "high": "[bold red]HIGH[/bold red]",
+        "medium": "[bold yellow]MEDIUM[/bold yellow]",
+        "low": "[bold green]LOW[/bold green]",
+        "idle": "[dim]IDLE[/dim]",
+    }
+    status_color = urgency_colors.get(urgency, "yellow")
+    urgency_label = urgency_labels.get(urgency, "")
+
     one_line = summary.get("one_line_status", "")
     if one_line:
-        lines.append(f"[bold]{one_line}[/bold]")
+        lines.append(f"[bold {status_color}]{one_line}[/bold {status_color}]")
+        if urgency_label:
+            lines.append(f"  Urgency: {urgency_label}")
         lines.append("")
 
     progress = summary.get("key_progress", [])
     if progress:
         lines.append("[bold cyan]Key Progress:[/bold cyan]")
         for item in progress:
-            lines.append(f"  [green]+[/green] {item}")
+            lines.append(f"  [green]\u2022[/green] {item}")
         lines.append("")
 
-    issues = summary.get("issues_needing_attention", [])
-    if issues:
+    # Support both new and legacy field names
+    attention = summary.get("needs_attention") or summary.get("issues_needing_attention") or []
+    if attention:
         lines.append("[bold yellow]Needs Attention:[/bold yellow]")
-        for item in issues:
-            lines.append(f"  [yellow]![/yellow] {item}")
+        for item in attention:
+            lines.append(f"  [yellow]\u26a0[/yellow] {item}")
         lines.append("")
 
     steps = summary.get("suggested_next_steps", [])
     if steps:
-        lines.append("[bold cyan]Suggested Next Steps:[/bold cyan]")
+        lines.append("[bold cyan]Next Steps:[/bold cyan]")
         for i, item in enumerate(steps, 1):
             lines.append(f"  [dim]{i}.[/dim] {item}")
 
@@ -224,16 +344,18 @@ class AISummaryGenerator:
             return {
                 "one_line_status": "AI summary unavailable (no API key configured)",
                 "key_progress": [],
-                "issues_needing_attention": [],
+                "needs_attention": [],
                 "suggested_next_steps": [],
+                "urgency": "medium",
             }
 
-        prompt = build_summary_prompt(project_name, input_data)
+        prompt = build_summary_prompt(project_name, input_data, db=self.db)
 
         try:
             response = self.client.messages.create(
                 model=MODEL,
                 max_tokens=1024,
+                system=SUMMARY_SYSTEM_PROMPT,
                 messages=[{"role": "user", "content": prompt}],
             )
             response_text = response.content[0].text
@@ -243,8 +365,9 @@ class AISummaryGenerator:
             summary = {
                 "one_line_status": f"AI summary generation failed: {e}",
                 "key_progress": [],
-                "issues_needing_attention": [],
+                "needs_attention": [],
                 "suggested_next_steps": [],
+                "urgency": "medium",
             }
 
         # Save to cache

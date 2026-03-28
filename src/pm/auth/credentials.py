@@ -63,6 +63,7 @@ def save_account(account: str, token: str, username: str, path: Path | None = No
     creds["accounts"][account] = {
         "token": token,
         "username": username,
+        "display_name": existing.get("display_name", ""),
         "selected_repos": existing.get("selected_repos", []),
     }
     save_credentials(creds, path)
@@ -75,16 +76,37 @@ def remove_account(account: str, path: Path | None = None) -> None:
         save_credentials(creds, path)
 
 
+def rename_account(account: str, new_name: str, path: Path | None = None) -> None:
+    creds = load_credentials(path)
+    if account in creds.get("accounts", {}):
+        creds["accounts"][account]["display_name"] = new_name
+        save_credentials(creds, path)
+
+
+def get_display_name(account: str, path: Path | None = None) -> str:
+    creds = load_credentials(path)
+    account_data = creds.get("accounts", {}).get(account, {})
+    name = account_data.get("display_name", "")
+    if name:
+        return name
+    # Generate default based on account id number
+    num = account.replace("account-", "")
+    return f"GitHub {num}"
+
+
 def list_accounts(path: Path | None = None) -> list[dict]:
     creds = load_credentials(path)
     accounts = creds.get("accounts", {})
     result = []
     for name, data in accounts.items():
+        num = name.replace("account-", "")
+        display = data.get("display_name", "") or f"GitHub {num}"
         result.append({
             "id": name,
             "username": data.get("username", "unknown"),
             "has_token": bool(data.get("token")),
             "selected_repos": data.get("selected_repos", []),
+            "display_name": display,
         })
     return result
 

@@ -11,13 +11,13 @@ from pm.tui.widgets.session_list import SessionInfo
 # Pre-generated AI summaries for demo mode
 DEMO_SUMMARIES = {
     "401K Website": {
-        "one_line_status": "Frontend mobile responsive redesign 80% complete, backend auth module has a login flow bug",
+        "one_line_status": "PR #42 auth bug CI failing + 3 comments 未解决; PR #38 mobile layout approved 可以 merge",
         "key_progress": [
             "Mobile responsive layout PR #38 approved and passing CI",
             "Component refactoring PR #35 under review",
             "Backend API endpoint update ready to merge",
         ],
-        "issues_needing_attention": [
+        "needs_attention": [
             "PR #42 fix auth bug - CI failing, 3 unresolved review comments",
             "Database migration PR #10 still pending review",
         ],
@@ -26,13 +26,14 @@ DEMO_SUMMARIES = {
             "Merge PR #38 (mobile layout) - already approved",
             "Review and merge PR #12 (API update) - approved and green",
         ],
+        "urgency": "high",
     },
     "Side Project": {
-        "one_line_status": "Project idle for 2 weeks, dependency update PR waiting for review",
+        "one_line_status": "闲置 14 天 — 上次是 dependency update PR #7, dark mode PR #5 等 review",
         "key_progress": [
             "Dark mode support PR ready for review",
         ],
-        "issues_needing_attention": [
+        "needs_attention": [
             "Dependency update PR has been open for 14 days - potential security risk",
             "No active development sessions",
         ],
@@ -40,13 +41,14 @@ DEMO_SUMMARIES = {
             "Review and merge dependency update PR #7",
             "Review dark mode PR #5 and provide feedback",
         ],
+        "urgency": "idle",
     },
     "FAA Project": {
-        "one_line_status": "CI failing on main branch, compliance documentation blocked on API schema changes",
+        "one_line_status": "PR #89 compliance CI failing + 5 comments; API validation PR #85 等 review — documentation blocked",
         "key_progress": [
             "New API validation PR #85 passing all checks",
         ],
-        "issues_needing_attention": [
+        "needs_attention": [
             "PR #89 compliance checks - CI failing, 5 unresolved comments",
             "Compliance documentation blocked on API schema",
             "2 active agent sessions working on fixes",
@@ -56,17 +58,19 @@ DEMO_SUMMARIES = {
             "Merge PR #85 (API validation) once reviewed",
             "Unblock documentation by finalizing API schema",
         ],
+        "urgency": "high",
     },
     "Internal Tool": {
-        "one_line_status": "Stable, single docs PR approved and ready to merge",
+        "one_line_status": "PR #15 docs update approved + CI green — 可以直接 merge",
         "key_progress": [
             "README update PR #15 approved and CI green",
             "No outstanding issues",
         ],
-        "issues_needing_attention": [],
+        "needs_attention": [],
         "suggested_next_steps": [
             "Merge PR #15 (docs update) - ready to go",
         ],
+        "urgency": "low",
     },
 }
 

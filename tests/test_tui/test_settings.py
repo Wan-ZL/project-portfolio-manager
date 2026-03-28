@@ -14,14 +14,22 @@ from pm.tui.screens.portfolio import PortfolioScreen
 from pm.tui.screens.settings import SettingsScreen, AccountItem
 from pm.tui.screens.repo_selector import RepoSelectorScreen, RepoItem
 from pm.auth.credentials import (
+    get_display_name,
     list_accounts,
     load_credentials,
     next_account_id,
     remove_account,
+    rename_account,
     save_account,
     save_credentials,
     save_selected_repos,
     get_selected_repos,
+)
+from pm.config.settings import (
+    load_settings,
+    save_settings,
+    update_setting,
+    DEFAULT_SETTINGS,
 )
 
 
@@ -31,6 +39,11 @@ from pm.auth.credentials import (
 @pytest.fixture
 def cred_file(tmp_path):
     return tmp_path / "credentials.yaml"
+
+
+@pytest.fixture
+def settings_file(tmp_path):
+    return tmp_path / "settings.yaml"
 
 
 class TestListAccounts:
@@ -53,6 +66,17 @@ class TestListAccounts:
         assert len(result) == 2
         ids = {a["id"] for a in result}
         assert ids == {"account-1", "account-2"}
+
+    def test_display_name_default(self, cred_file):
+        save_account("account-1", "ghp_a", "alice", cred_file)
+        result = list_accounts(cred_file)
+        assert result[0]["display_name"] == "GitHub 1"
+
+    def test_display_name_custom(self, cred_file):
+        save_account("account-1", "ghp_a", "alice", cred_file)
+        rename_account("account-1", "Personal", cred_file)
+        result = list_accounts(cred_file)
+        assert result[0]["display_name"] == "Personal"
 
 
 class TestNextAccountId:
@@ -81,6 +105,43 @@ class TestRemoveAccount:
         # Should not raise
         remove_account("account-99", cred_file)
 
+    def test_remove_preserves_others(self, cred_file):
+        save_account("account-1", "ghp_a", "alice", cred_file)
+        save_account("account-2", "ghp_b", "bob", cred_file)
+        remove_account("account-1", cred_file)
+        result = list_accounts(cred_file)
+        assert len(result) == 1
+        assert result[0]["id"] == "account-2"
+
+
+class TestRenameAccount:
+    def test_rename(self, cred_file):
+        save_account("account-1", "ghp_a", "alice", cred_file)
+        rename_account("account-1", "Personal", cred_file)
+        name = get_display_name("account-1", cred_file)
+        assert name == "Personal"
+
+    def test_rename_nonexistent(self, cred_file):
+        # Should not raise
+        rename_account("account-99", "Name", cred_file)
+
+    def test_rename_preserves_token(self, cred_file):
+        save_account("account-1", "ghp_a", "alice", cred_file)
+        rename_account("account-1", "Work", cred_file)
+        creds = load_credentials(cred_file)
+        assert creds["accounts"]["account-1"]["token"] == "ghp_a"
+        assert creds["accounts"]["account-1"]["username"] == "alice"
+
+    def test_default_display_name(self, cred_file):
+        save_account("account-1", "ghp_a", "alice", cred_file)
+        name = get_display_name("account-1", cred_file)
+        assert name == "GitHub 1"
+
+    def test_display_name_account_2(self, cred_file):
+        save_account("account-2", "ghp_b", "bob", cred_file)
+        name = get_display_name("account-2", cred_file)
+        assert name == "GitHub 2"
+
 
 class TestSelectedRepos:
     def test_save_and_get(self, cred_file):
@@ -105,6 +166,73 @@ class TestSelectedRepos:
     def test_nonexistent_account(self, cred_file):
         result = get_selected_repos("nonexistent", cred_file)
         assert result == []
+
+    def test_preserves_display_name_on_resave(self, cred_file):
+        save_account("account-1", "ghp_a", "alice", cred_file)
+        rename_account("account-1", "Work", cred_file)
+        save_account("account-1", "ghp_b", "alice", cred_file)
+        name = get_display_name("account-1", cred_file)
+        assert name == "Work"
+
+
+# ────────────────────── Settings YAML ──────────────────────
+
+
+class TestSettingsYaml:
+    def test_default_settings(self, settings_file):
+        settings = load_settings(settings_file)
+        assert settings["overlay"]["enabled"] is False
+        assert settings["overlay"]["show_count"] == 3
+        assert settings["overlay"]["position"] == "bottom-right"
+        assert settings["overlay"]["opacity"] == 70
+        assert settings["general"]["default_agent"] == "claude-code"
+        assert settings["general"]["poll_interval"] == "5s"
+
+    def test_save_and_load(self, settings_file):
+        data = {
+            "overlay": {
+                "enabled": True,
+                "show_count": 5,
+                "position": "top-left",
+                "opacity": 50,
+            },
+            "general": {
+                "default_agent": "gpt-4",
+                "poll_interval": "10s",
+            },
+        }
+        save_settings(data, settings_file)
+        loaded = load_settings(settings_file)
+        assert loaded["overlay"]["enabled"] is True
+        assert loaded["overlay"]["show_count"] == 5
+        assert loaded["overlay"]["position"] == "top-left"
+        assert loaded["general"]["default_agent"] == "gpt-4"
+
+    def test_update_setting(self, settings_file):
+        update_setting("overlay", "enabled", True, settings_file)
+        settings = load_settings(settings_file)
+        assert settings["overlay"]["enabled"] is True
+        # Other defaults should still be present
+        assert settings["overlay"]["show_count"] == 3
+
+    def test_update_preserves_other_keys(self, settings_file):
+        update_setting("overlay", "opacity", 50, settings_file)
+        update_setting("general", "default_agent", "gpt-4", settings_file)
+        settings = load_settings(settings_file)
+        assert settings["overlay"]["opacity"] == 50
+        assert settings["general"]["default_agent"] == "gpt-4"
+        # Defaults should remain
+        assert settings["overlay"]["enabled"] is False
+
+    def test_partial_file_gets_defaults(self, settings_file):
+        # Write only overlay section
+        save_settings({"overlay": {"enabled": True}}, settings_file)
+        settings = load_settings(settings_file)
+        assert settings["overlay"]["enabled"] is True
+        # Missing overlay keys get defaults
+        assert settings["overlay"]["show_count"] == 3
+        # Missing general section gets defaults
+        assert settings["general"]["default_agent"] == "claude-code"
 
 
 # ────────────────────── TUI: Settings Screen ──────────────────────
@@ -153,13 +281,33 @@ async def test_settings_screen_escape_goes_back():
 
 
 @pytest.mark.asyncio
-async def test_settings_screen_shows_general_settings():
+async def test_settings_screen_has_three_sections():
     app = PMApp()
     async with app.run_test() as pilot:
         app.push_screen(SettingsScreen())
         await pilot.pause()
-        content = app.query_one("#general-settings-content")
-        assert content is not None
+        headers = app.query(".settings-section-header")
+        assert len(headers) == 3
+
+
+@pytest.mark.asyncio
+async def test_settings_screen_has_overlay_container():
+    app = PMApp()
+    async with app.run_test() as pilot:
+        app.push_screen(SettingsScreen())
+        await pilot.pause()
+        container = app.query_one("#overlay-settings-container")
+        assert container is not None
+
+
+@pytest.mark.asyncio
+async def test_settings_screen_has_general_container():
+    app = PMApp()
+    async with app.run_test() as pilot:
+        app.push_screen(SettingsScreen())
+        await pilot.pause()
+        container = app.query_one("#general-settings-container")
+        assert container is not None
 
 
 # ────────────────────── TUI: Repo Selector Screen ──────────────────────
@@ -215,6 +363,22 @@ async def test_repo_selector_escape_cancels():
         assert not isinstance(app.screen, RepoSelectorScreen)
 
 
+@pytest.mark.asyncio
+async def test_repo_selector_has_count_status():
+    app = PMApp()
+    screen = RepoSelectorScreen(
+        account_id="account-1",
+        username="alice",
+        token="ghp_fake",
+        selected_repos=[],
+    )
+    async with app.run_test() as pilot:
+        app.push_screen(screen)
+        await pilot.pause()
+        status = app.query_one("#repo-count-status")
+        assert status is not None
+
+
 # ────────────────────── TUI: Portfolio empty state ──────────────────────
 
 
@@ -241,9 +405,9 @@ async def test_comma_opens_settings_from_portfolio():
 
 @pytest.mark.asyncio
 async def test_demo_mode_shows_portfolio_not_empty():
-    """In demo mode, portfolio body should be visible, not the empty state."""
+    """In demo mode, cards scroll should be visible, not the empty state."""
     app = PMApp(demo=True)
     async with app.run_test() as pilot:
         assert isinstance(app.screen, PortfolioScreen)
-        body = app.query_one("#portfolio-body")
-        assert "hidden" not in body.classes
+        scroll = app.query_one("#cards-scroll")
+        assert "hidden" not in scroll.classes
