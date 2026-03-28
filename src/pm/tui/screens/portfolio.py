@@ -597,6 +597,28 @@ class PortfolioScreen(Screen):
         else:
             self._show_empty_state()
 
+        self._show_recovery_notification()
+
+    def _show_recovery_notification(self) -> None:
+        """Show notification if sessions were recovered on startup."""
+        try:
+            recovered = getattr(self.app, '_recovered_sessions', [])
+            if not recovered:
+                return
+            recovered_count = sum(1 for r in recovered if r["status"] == "recovered")
+            lost_count = sum(1 for r in recovered if r["status"] == "lost")
+            parts = []
+            if recovered_count:
+                parts.append(f"Recovered {recovered_count} agent session(s) that were running while PPM was closed")
+            if lost_count:
+                parts.append(f"{lost_count} session(s) were lost (tmux ended)")
+            if parts:
+                status_bar = self.query_one(StatusBar)
+                status_bar.set_message(" | ".join(parts))
+                self.set_timer(8, lambda: status_bar.set_message(""))
+        except Exception:
+            pass
+
     def _show_empty_state(self) -> None:
         empty = self.query_one("#empty-state-container")
         empty.add_class("visible")

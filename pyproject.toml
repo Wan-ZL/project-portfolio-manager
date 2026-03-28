@@ -31,6 +31,7 @@ dependencies = [
     "anthropic>=0.40",
     "pydantic>=2.0",
     "pyyaml",
+    "pyobjc-framework-Cocoa",
 ]
 
 [project.urls]
@@ -40,6 +41,7 @@ Issues = "https://github.com/user/project-portfolio-manager/issues"
 
 [project.scripts]
 ppm = "pm.cli:main"
+ppm-overlay = "pm.overlay.window:main"
 
 [build-system]
 requires = ["hatchling"]

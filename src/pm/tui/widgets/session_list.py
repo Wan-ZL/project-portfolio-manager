@@ -44,6 +44,8 @@ class SessionItem(Static):
             "paused": "[yellow]\u275a\u275a[/yellow]",
             "completed": "[cyan]\u2714[/cyan]",
             "failed": "[red]\u2718[/red]",
+            "recovered": "[bold magenta]\u21bb[/bold magenta]",
+            "lost": "[red]\u2620[/red]",
         }.get(self.session_info.status, "[dim]?[/dim]")
 
         pr_info = f" PR #{self.session_info.pr_number}" if self.session_info.pr_number else ""

@@ -87,6 +87,35 @@ ActivityTimeline {
     background: $surface-darken-1;
 }
 
+/* Search bar */
+#search-container {
+    dock: bottom;
+    height: auto;
+    max-height: 3;
+    background: $surface-darken-2;
+    padding: 0 1;
+    display: none;
+}
+
+#search-container.visible {
+    display: block;
+}
+
+#search-input {
+    width: 100%;
+}
+
+#search-results-count {
+    height: 1;
+    padding: 0 1;
+    color: $text-muted;
+    display: none;
+}
+
+#search-results-count.visible {
+    display: block;
+}
+
 /* New task input */
 #new-task-container {
     dock: bottom;

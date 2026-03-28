@@ -263,6 +263,8 @@ class SessionListItem(SelectableItem):
             "paused": "\u23f8",
             "completed": "[cyan]\u2714[/cyan]",
             "failed": "[red]\u2718[/red]",
+            "recovered": "[bold magenta]\u21bb[/bold magenta]",
+            "lost": "[red]\u2620[/red]",
         }.get(self.session_info.status, "[dim]?[/dim]")
         indicator = "[cyan]\u25ba[/cyan] " if self.selected else "  "
         duration = _time_ago(self.session_info.created_at, self._now)
@@ -408,6 +410,34 @@ class ProjectScreen(Screen):
         width: 100%;
     }
 
+    #search-container {
+        dock: bottom;
+        height: auto;
+        max-height: 3;
+        background: $surface-darken-2;
+        padding: 0 1;
+        display: none;
+    }
+
+    #search-container.visible {
+        display: block;
+    }
+
+    #search-input {
+        width: 100%;
+    }
+
+    #search-results-count {
+        height: 1;
+        padding: 0 1;
+        color: $text-muted;
+        display: none;
+    }
+
+    #search-results-count.visible {
+        display: block;
+    }
+
     StatusBar {
         dock: bottom;
         height: 1;
@@ -428,6 +458,7 @@ class ProjectScreen(Screen):
         Binding("m", "merge_pr", "Merge"),
         Binding("o", "open_assets", "Open Assets"),
         Binding("d", "dismiss_welcome", "Dismiss Welcome", show=False),
+        Binding("slash", "search_sessions", "Search", show=True),
     ]
 
     class GoBack(Message):
@@ -444,6 +475,8 @@ class ProjectScreen(Screen):
         self._all_items: list[SelectableItem] = []
         self._selected_index = 0
         self._task_input_visible = False
+        self._search_visible = False
+        self._search_query = ""
 
     def compose(self) -> ComposeResult:
         yield Static(
@@ -495,6 +528,10 @@ class ProjectScreen(Screen):
                     id="instructions-section",
                 )
 
+        with Container(id="search-container"):
+            yield Label("[bold cyan]/[/bold cyan] Search sessions")
+            yield Input(placeholder="Search sessions...", id="search-input")
+        yield Static("", id="search-results-count")
         with Container(id="new-task-container"):
             yield Label("[bold cyan]New Task:[/bold cyan] Enter task description")
             yield Input(placeholder="Describe the task...", id="new-task-input")
@@ -538,6 +575,9 @@ class ProjectScreen(Screen):
             self._update_selection()
 
     def action_go_back(self) -> None:
+        if self._search_visible:
+            self._hide_search()
+            return
         if self._task_input_visible:
             self._hide_task_input()
             return
@@ -660,7 +700,85 @@ class ProjectScreen(Screen):
         container = self.query_one("#new-task-container")
         container.remove_class("visible")
 
+    def action_search_sessions(self) -> None:
+        self._show_search()
+
+    def _show_search(self) -> None:
+        self._search_visible = True
+        container = self.query_one("#search-container")
+        container.add_class("visible")
+        try:
+            self.query_one("#search-input", Input).focus()
+        except Exception:
+            pass
+
+    def _hide_search(self) -> None:
+        self._search_visible = False
+        container = self.query_one("#search-container")
+        container.remove_class("visible")
+        results_label = self.query_one("#search-results-count", Static)
+        results_label.remove_class("visible")
+        try:
+            self.query_one("#search-input", Input).value = ""
+        except Exception:
+            pass
+        self._restore_all_sessions()
+
+    def _filter_sessions(self, query: str) -> None:
+        self._search_query = query
+        query_lower = query.lower()
+        session_items = list(self.query(SessionListItem))
+        visible_count = 0
+        for item in session_items:
+            info = item.session_info
+            searchable = " ".join([
+                info.task or "",
+                info.agent or "",
+                info.branch or "",
+                info.status or "",
+            ]).lower()
+            if query_lower in searchable:
+                item.display = True
+                visible_count += 1
+            else:
+                item.display = False
+
+        results_label = self.query_one("#search-results-count", Static)
+        results_label.update(f"  [dim]{visible_count} result(s)[/dim]")
+        results_label.add_class("visible")
+
+        self._all_items = (
+            list(self.query(PRListItem))
+            + [s for s in self.query(SessionListItem) if s.display]
+        )
+        if self._all_items:
+            self._selected_index = min(self._selected_index, len(self._all_items) - 1)
+        else:
+            self._selected_index = 0
+        self._update_selection()
+
+    def _restore_all_sessions(self) -> None:
+        for item in self.query(SessionListItem):
+            item.display = True
+        self._all_items = list(self.query(PRListItem)) + list(self.query(SessionListItem))
+        if self._all_items:
+            self._selected_index = min(self._selected_index, len(self._all_items) - 1)
+        self._update_selection()
+
+    def on_input_changed(self, event: Input.Changed) -> None:
+        if event.input.id == "search-input" and self._search_visible:
+            query = event.value.strip()
+            if query:
+                self._filter_sessions(query)
+            else:
+                self._restore_all_sessions()
+                results_label = self.query_one("#search-results-count", Static)
+                results_label.remove_class("visible")
+
     def on_input_submitted(self, event: Input.Submitted) -> None:
+        if event.input.id == "search-input":
+            self._hide_search()
+            return
         if event.input.id == "new-task-input":
             task_desc = event.value.strip()
             if task_desc:

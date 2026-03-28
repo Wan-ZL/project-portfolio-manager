@@ -19,6 +19,11 @@ class PMApp(App):
         Binding("comma", "open_settings", "Settings", show=False),
     ]
 
+    def __init__(self, demo: bool = False, **kwargs):
+        super().__init__(**kwargs)
+        self._demo = demo
+        self._recovered_sessions: list[dict] = []
+
     DEFAULT_CSS = """
     Screen {
         background: $surface;
@@ -80,16 +85,28 @@ class PMApp(App):
         "settings": SettingsScreen,
     }
 
-    def __init__(self, demo: bool = False, **kwargs):
-        super().__init__(**kwargs)
-        self._demo = demo
-
     @property
     def demo_mode(self) -> bool:
         return self._demo
 
     def on_mount(self) -> None:
+        if not self._demo:
+            self._run_crash_recovery()
         self.push_screen(PortfolioScreen())
+
+    def _run_crash_recovery(self) -> None:
+        """Detect orphaned tmux sessions from a previous crash."""
+        try:
+            from pm.config.loader import load_config
+            from pm.db.database import Database
+            from pm.agent.session import SessionManager
+
+            config = load_config()
+            db = Database()
+            mgr = SessionManager(config, db)
+            self._recovered_sessions = mgr.recover_sessions()
+        except Exception:
+            self._recovered_sessions = []
 
     def action_open_settings(self) -> None:
         # Don't open settings if already on settings screen

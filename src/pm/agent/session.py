@@ -100,7 +100,60 @@ class SessionManager:
             updated_at=datetime.now(),
         )
         self.db.upsert_session(db_session)
+        self.db.index_session(db_session)
         return db_session
+
+    def recover_sessions(self) -> list[dict]:
+        """Scan for orphaned tmux sessions and reconcile with DB.
+
+        Returns list of recovered sessions with {session_id, tmux_name, status}.
+        """
+        active_tmux = self._list_tmux_sessions()
+        pm_tmux = {name for name in active_tmux if name.startswith("pm_")}
+        all_db_sessions = self.db.get_all_sessions()
+
+        results: list[dict] = []
+
+        # Build a lookup from tmux_session name to DB session
+        db_by_tmux: dict[str, DBSession] = {}
+        for s in all_db_sessions:
+            if s.tmux_session:
+                db_by_tmux[s.tmux_session] = s
+
+        # Check each DB session
+        for s in all_db_sessions:
+            if s.status == "running" and (not s.tmux_session or s.tmux_session not in pm_tmux):
+                # DB says running but tmux session is gone -> mark as lost
+                s.status = "lost"
+                s.updated_at = datetime.now()
+                self.db.upsert_session(s)
+                results.append({
+                    "session_id": s.id,
+                    "tmux_name": s.tmux_session or "",
+                    "status": "lost",
+                })
+            elif s.status in ("completed", "failed") and s.tmux_session and s.tmux_session in pm_tmux:
+                # DB says completed/failed but tmux session still exists -> mark as recovered
+                s.status = "recovered"
+                s.updated_at = datetime.now()
+                self.db.upsert_session(s)
+                results.append({
+                    "session_id": s.id,
+                    "tmux_name": s.tmux_session,
+                    "status": "recovered",
+                })
+
+        # Check for tmux sessions that have no DB record at all
+        known_tmux_names = {s.tmux_session for s in all_db_sessions if s.tmux_session}
+        for tmux_name in pm_tmux:
+            if tmux_name not in known_tmux_names:
+                results.append({
+                    "session_id": "",
+                    "tmux_name": tmux_name,
+                    "status": "recovered",
+                })
+
+        return results
 
     def list_sessions(self, project: str | None = None) -> list[DBSession]:
         """List sessions, verifying tmux is alive."""

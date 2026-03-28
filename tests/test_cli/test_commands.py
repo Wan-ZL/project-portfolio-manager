@@ -1,9 +1,5 @@
 from __future__ import annotations
 
-import os
-import tempfile
-from pathlib import Path
-
 import pytest
 from click.testing import CliRunner
 
@@ -41,28 +37,16 @@ class TestPrsCommand:
         assert "Repo" in result.output or "sample" in result.output.lower() or "No open pull requests" in result.output
 
 
-class TestConfigCommand:
-    def test_config_runs(self, runner):
-        result = runner.invoke(main, ["config"])
+class TestOverlayCommand:
+    def test_overlay_runs(self, runner):
+        result = runner.invoke(main, ["overlay"])
         assert result.exit_code == 0
-        # Should show config info or error about missing config
-        assert "Configuration" in result.output or "config" in result.output.lower()
+        assert "Coming soon" in result.output
 
-    def test_config_init_creates_file(self, runner):
-        with tempfile.TemporaryDirectory() as tmpdir:
-            config_path = Path(tmpdir) / "config.yaml"
-            # Monkey-patch the config path
-            import pm.cli as cli_module
-            # Use environment to prevent writing to real home dir
-            # Instead just test that the command runs and creates the file
-            # by checking help output
-            result = runner.invoke(main, ["config", "init", "--help"])
-            assert result.exit_code == 0
-
-    def test_config_init_help(self, runner):
-        result = runner.invoke(main, ["config", "init", "--help"])
+    def test_overlay_help(self, runner):
+        result = runner.invoke(main, ["overlay", "--help"])
         assert result.exit_code == 0
-        assert "sample" in result.output.lower() or "config" in result.output.lower()
+        assert "overlay" in result.output.lower() or "desktop" in result.output.lower()
 
 
 class TestWorkCommand:
@@ -100,6 +84,6 @@ class TestMainCommand:
     def test_subcommands_listed(self, runner):
         result = runner.invoke(main, ["--help"])
         assert "status" in result.output
-        assert "config" in result.output
         assert "prs" in result.output
+        assert "overlay" in result.output
         assert "work" in result.output

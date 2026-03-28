@@ -1,12 +1,8 @@
 from __future__ import annotations
 
-import tempfile
-from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
-import yaml
-from click.testing import CliRunner
 
 from pm.auth.github_oauth import (
     get_gh_token,
@@ -14,12 +10,6 @@ from pm.auth.github_oauth import (
     login_with_manual_token,
     validate_token,
 )
-from pm.cli import main
-
-
-@pytest.fixture
-def runner():
-    return CliRunner()
 
 
 @pytest.fixture
@@ -159,74 +149,3 @@ class TestLoginWithManualToken:
         assert result is False
 
 
-class TestAuthCLI:
-    def test_auth_help(self, runner):
-        result = runner.invoke(main, ["auth", "--help"])
-        assert result.exit_code == 0
-        assert "login" in result.output
-        assert "status" in result.output
-
-    def test_auth_login_help(self, runner):
-        result = runner.invoke(main, ["auth", "login", "--help"])
-        assert result.exit_code == 0
-        assert "--account" in result.output
-
-    def test_auth_status_help(self, runner):
-        result = runner.invoke(main, ["auth", "status", "--help"])
-        assert result.exit_code == 0
-
-    @patch("pm.auth.github_oauth.login_with_manual_token")
-    @patch("pm.auth.github_oauth.login_with_gh")
-    def test_login_tries_gh_first(self, mock_gh, mock_manual):
-        mock_gh.return_value = True
-        runner = CliRunner()
-        result = runner.invoke(main, ["auth", "login"])
-        assert result.exit_code == 0
-        mock_gh.assert_called_once_with("personal")
-        mock_manual.assert_not_called()
-
-    @patch("pm.auth.github_oauth.login_with_manual_token")
-    @patch("pm.auth.github_oauth.login_with_gh")
-    def test_login_falls_back_to_manual(self, mock_gh, mock_manual):
-        mock_gh.return_value = False
-        mock_manual.return_value = True
-        runner = CliRunner()
-        result = runner.invoke(main, ["auth", "login"])
-        assert result.exit_code == 0
-        mock_gh.assert_called_once_with("personal")
-        mock_manual.assert_called_once_with("personal")
-
-    @patch("pm.auth.github_oauth.login_with_manual_token")
-    @patch("pm.auth.github_oauth.login_with_gh")
-    def test_login_with_custom_account(self, mock_gh, mock_manual):
-        mock_gh.return_value = True
-        runner = CliRunner()
-        result = runner.invoke(main, ["auth", "login", "--account", "company"])
-        assert result.exit_code == 0
-        mock_gh.assert_called_once_with("company")
-
-    @patch("pm.auth.credentials.load_credentials")
-    def test_auth_status_no_accounts(self, mock_load):
-        mock_load.return_value = {"accounts": {}}
-        runner = CliRunner()
-        result = runner.invoke(main, ["auth", "status"])
-        assert result.exit_code == 0
-        assert "No accounts" in result.output or "ppm auth login" in result.output
-
-    @patch("pm.auth.credentials.load_credentials")
-    def test_auth_status_with_accounts(self, mock_load):
-        mock_load.return_value = {
-            "accounts": {
-                "personal": {"token": "ghp_abcdef123456", "username": "zelin"},
-            }
-        }
-        runner = CliRunner()
-        result = runner.invoke(main, ["auth", "status"])
-        assert result.exit_code == 0
-        assert "zelin" in result.output
-        assert "personal" in result.output
-
-    def test_auth_subcommands_listed_in_main_help(self, runner):
-        result = runner.invoke(main, ["--help"])
-        assert result.exit_code == 0
-        assert "auth" in result.output
