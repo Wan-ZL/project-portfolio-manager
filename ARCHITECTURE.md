@@ -242,90 +242,127 @@ CREATE TABLE reaction_tracker (
 
 ### 8.1 Portfolio View (P6 — Opening Dashboard)
 
+The Portfolio View shows all projects as compact 3-line cards, grouped by account:
+
 ```
-┌─ Portfolio Manager ─────────────────────────────────────────────┐
-│                                                                  │
-│  ┌─ Projects (30%) ──────┐  ┌─ Detail (70%) ───────────────┐   │
-│  │                        │  │                               │   │
-│  │  ▼ Personal Account    │  │  [Status] [PRs] [Sessions]   │   │
-│  │    ● 401K Website  🟢  │  │                               │   │
-│  │    ○ Side Project  🟡  │  │  401K Website                 │   │
-│  │                        │  │  ─────────────────────────    │   │
-│  │  ▼ Company Account     │  │  AI: Frontend development     │   │
-│  │    ○ FAA Project   🔴  │  │  nearing completion. Backend  │   │
-│  │    ○ Internal Tool 🟢  │  │  auth has a bug that needs    │   │
-│  │                        │  │  fixing.                      │   │
-│  │                        │  │                               │   │
-│  │                        │  │  PRs: 5 open (2 need review)  │   │
-│  │                        │  │  Sessions: 1 running          │   │
-│  │                        │  │                               │   │
-│  │                        │  │  Suggest: Fix auth bug first, │   │
-│  │                        │  │  then do mobile responsive    │   │
-│  │                        │  │                               │   │
-│  └────────────────────────┘  └───────────────────────────────┘   │
-│                                                                  │
-│  [n] New Task  [w] Work  [r] Refresh  [s] Suggest  [?] Help    │
-│  > _                                                             │
-└──────────────────────────────────────────────────────────────────┘
+┌─ PPM  │  Your projects at a glance ──────────────────────────────┐
+│                                                                    │
+│  ▼ Personal (zelin)                                                │
+│  ┌─────────────────────────────────────────────────────────────┐   │
+│  │ ● 401K Website  5 PRs  🟡                                   │   │
+│  │   PR #42 (auth fix) CI failing — 3 comments 未解决;          │   │
+│  │   💡 先修 PR #42 的 CI, 然后 merge PR #38                    │   │
+│  │   🔄 上次: "Fix auth bug in login flow" (2h ago)             │   │
+│  └─────────────────────────────────────────────────────────────┘   │
+│  ┌─────────────────────────────────────────────────────────────┐   │
+│  │ ● Side Project  2 PRs                                        │   │
+│  │   闲置 14 天, 上次 commit: update dependencies               │   │
+│  │   💡 Review PR #7 (dependency update)                        │   │
+│  │   📋 还没有执行过任务                                         │   │
+│  └─────────────────────────────────────────────────────────────┘   │
+│                                                                    │
+│  ▼ Company                                                         │
+│  ┌─────────────────────────────────────────────────────────────┐   │
+│  │ ● FAA Project  8 PRs  🔴                                    │   │
+│  │   PR #89 compliance CI failing + 5 comments; PR #85 等       │   │
+│  │   review; 💡 修 PR #89 的 CI, 处理 5 个 review comments      │   │
+│  │   🔄 上次: "Update compliance checks for FAA audit" (5h ago) │   │
+│  └─────────────────────────────────────────────────────────────┘   │
+│                                                                    │
+│  [n] New Task  [r] Refresh  [s] Settings  [?] Help  [q] Quit     │
+└────────────────────────────────────────────────────────────────────┘
 ```
 
+**3-Line Card Format:**
+
+| Line | Content | Source |
+|------|---------|--------|
+| Line 1 | `● {name}  {N} PRs  {status_dot}` | GitHub API (PR count), project status |
+| Line 2 | `{dynamic}; 💡 {recommendation}` | AI-generated via `card_summary.py` |
+| Line 3 | `{icon} 上次: "{last_command_summary}" ({time})` | Sessions DB + AI compression |
+
+Cards render immediately with "Loading..." for Line 2, then update asynchronously when AI completes.
+
+### 8.1.1 Portfolio Card Data Pipeline
+
+```
+Step 1: Data Collection (deterministic)
+  ├── GitHub API → recent commits, open PRs, merged PRs, issues count
+  ├── Sessions DB → last user command, status, time, PR number
+  └── Output: CardContext dataclass
+
+Step 2: Hash Computation
+  └── SHA256(CardContext fields) → 16-char hex string
+      Used for cache invalidation (same input = skip AI)
+
+Step 3: AI Generation (or fallback)
+  ├── If cached (memory or DB): return cached result
+  ├── If API key available: call Claude API with CARD_SUMMARY_SYSTEM_PROMPT
+  │   └── Single API call generates all 3 fields as JSON
+  └── If no API key: deterministic fallback
+      ├── dynamic: based on most recent PR or commit
+      ├── recommendation: based on PR CI status
+      └── last_command_summary: truncate to 40 chars
+```
+
+**Cache Strategy:**
+- Memory cache: `dict[project_name, {hash, data}]` — instant, per-session
+- DB cache: `project_summaries` table with key `__card__{project_name}` — persists across sessions
+- Cache key: SHA256 hash of input data (commits, PRs, issues, last command, etc.)
+- Cache invalidation: automatic when input data changes
+
+**Cost Estimate:**
+- ~$0.001 per card per refresh (Claude Sonnet, ~500 input + ~100 output tokens)
+- With caching: effectively $0 for unchanged projects
+- Fallback mode: $0 (no API calls)
+
 ### 8.2 Project View (J3 — Single Project Detail)
+
+Full-screen view for a single project, showing PRs grouped by repo, sessions, and issues:
 
 ```
 ┌─ PM > 401K Website ─────────────────────────────────────────────┐
 │                                                                  │
-│  ┌─ Repos & PRs (35%) ──────┐  ┌─ Detail (65%) ────────────┐   │
-│  │                            │  │                           │   │
-│  │  📦 owner/401k-frontend    │  │  [Info] [Diff] [Terminal] │   │
-│  │    PR #42 fix auth ⬤🔴CI  │  │                           │   │
-│  │    PR #38 add mobile 🟢   │  │  PR #42: fix auth bug     │   │
-│  │    PR #35 refactor 🟡     │  │  ─────────────────────    │   │
-│  │                            │  │  Author: bot              │   │
-│  │  📦 owner/401k-backend     │  │  CI: ❌ failing (2 checks)│   │
-│  │    PR #12 api update 🟢   │  │  Review: changes_requested│   │
-│  │    (no more open PRs)      │  │  Comments: 3 unresolved   │   │
-│  │                            │  │                           │   │
-│  │  ── Sessions ──            │  │  Latest comment:          │   │
-│  │    🤖 fix-auth (running)   │  │  "Please handle the null  │   │
-│  │    🤖 mobile-ui (paused)   │  │   case on line 42"        │   │
-│  │                            │  │                           │   │
-│  │  ── Issues (5 open) ──     │  │  Instructions:            │   │
-│  │    #18 Login timeout       │  │  "Focus on mobile         │   │
-│  │    #15 CSS broken on iOS   │  │   responsive design..."   │   │
-│  │    #12 API rate limit      │  │                           │   │
-│  └────────────────────────────┘  └───────────────────────────┘   │
+│  ┌─ Repos & PRs ──────────────┐  ┌─ Detail ────────────────┐   │
+│  │                              │  │                         │   │
+│  │  📦 owner/401k-frontend      │  │  PR #42: fix auth bug   │   │
+│  │    ● PR #42 fix auth 🔴 CI  │  │  Author: ai-bot         │   │
+│  │    ● PR #38 add mobile 🟢   │  │  CI: 🔴 failing         │   │
+│  │    ● PR #35 refactor 🟡     │  │  Review: changes_req    │   │
+│  │                              │  │  Comments: 3 unresolved │   │
+│  │  📦 owner/401k-backend       │  │                         │   │
+│  │    ● PR #12 api update 🟢   │  │  Instructions:          │   │
+│  │                              │  │  "Focus on mobile       │   │
+│  │  ── Sessions ──              │  │   responsive design..." │   │
+│  │    🤖 fix-auth (running)     │  │                         │   │
+│  │                              │  │                         │   │
+│  └──────────────────────────────┘  └─────────────────────────┘   │
 │                                                                  │
 │  [n] New Task  [a] Attach  [f] Fix PR  [m] Merge  [Esc] Back   │
-│  > _                                                             │
 └──────────────────────────────────────────────────────────────────┘
 ```
 
 ### 8.3 Task View (T1 — Agent Session)
 
+Split view showing session metadata and live agent terminal output:
+
 ```
 ┌─ PM > 401K Website > fix-auth-bug [running] ────────────────────┐
 │                                                                  │
-│  ┌─ Session Info (25%) ──┐  ┌─ Agent Terminal (75%) ─────────┐  │
-│  │                        │  │                                 │  │
-│  │  Task: fix auth bug    │  │  $ claude --prompt "Fix the     │  │
-│  │  Agent: claude-code    │  │  auth bug in login flow..."     │  │
-│  │  Model: sonnet-4-6     │  │                                 │  │
-│  │  Branch: pm/fix-auth   │  │  ● Reading src/auth/login.ts   │  │
-│  │  Worktree: ~/.pm/wt/.. │  │  ● Found null check missing    │  │
-│  │  Started: 2min ago     │  │    on line 42                   │  │
-│  │  Status: 🟢 active     │  │  ● Editing src/auth/login.ts   │  │
-│  │                        │  │  ● Running tests...             │  │
-│  │  ── PR Status ──       │  │    ✓ 23 passed                  │  │
-│  │  PR: #42               │  │    ✗ 1 failed                   │  │
-│  │  CI: 🔴 failing        │  │  ● Fixing test failure...       │  │
-│  │  Review: pending       │  │  ● Running tests...             │  │
-│  │  Comments: 0           │  │    ✓ 24 passed                  │  │
-│  │                        │  │  ● Creating PR...               │  │
-│  │  ── Reactions ──       │  │                                 │  │
-│  │  ci-failed: 0/3 retry  │  │  > Waiting for input...         │  │
-│  │  changes_req: 0/2      │  │                                 │  │
-│  │                        │  │                                 │  │
-│  └────────────────────────┘  └─────────────────────────────────┘  │
+│  ┌─ Session Info ──────────┐  ┌─ Agent Terminal ─────────────┐  │
+│  │                          │  │                               │  │
+│  │  Task: fix auth bug      │  │  $ claude --prompt "Fix the   │  │
+│  │  Agent: claude-code      │  │  auth bug in login flow..."   │  │
+│  │  Branch: pm/fix-auth     │  │                               │  │
+│  │  Started: 2min ago       │  │  ● Reading src/auth/login.ts  │  │
+│  │  Status: 🟢 active       │  │  ● Found null check missing   │  │
+│  │                          │  │  ● Running tests...            │  │
+│  │  ── PR Status ──         │  │    ✓ 24 passed                 │  │
+│  │  PR: #42                 │  │  ● Creating PR...              │  │
+│  │  CI: 🔴 failing          │  │                               │  │
+│  │  Review: pending         │  │  > Waiting for input...        │  │
+│  │                          │  │                               │  │
+│  └──────────────────────────┘  └───────────────────────────────┘  │
 │                                                                  │
 │  [Ctrl+Q] Detach  [p] Pause  [k] Kill  [r] Reprompt  [Esc] Back │
 └──────────────────────────────────────────────────────────────────┘
@@ -596,6 +633,8 @@ pm/
 │       ├── ai/
 │       │   ├── __init__.py
 │       │   ├── summary.py           # AI project summaries (P3)
+│       │   ├── card_summary.py      # Portfolio card data pipeline (3-line cards)
+│       │   ├── demo.py              # Demo mode data
 │       │   └── suggest.py           # AI next-step suggestions (P5)
 │       ├── db/
 │       │   ├── __init__.py

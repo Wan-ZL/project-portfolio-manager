@@ -74,6 +74,46 @@ DEMO_SUMMARIES = {
     },
 }
 
+# Pre-generated card summaries for demo mode (3-line card format)
+DEMO_CARD_SUMMARIES = {
+    "401K Website": {
+        "data": {
+            "dynamic": "PR #42 (auth fix) CI failing — 3 comments 未解决",
+            "recommendation": "先修 PR #42 的 CI, 然后 merge PR #38",
+            "last_command_summary": "Fix auth bug in login flow",
+        },
+        "status": "running",
+        "time": "2h ago",
+    },
+    "Side Project": {
+        "data": {
+            "dynamic": "闲置 14 天, 上次 commit: update dependencies",
+            "recommendation": "Review PR #7 (dependency update)",
+            "last_command_summary": "",
+        },
+        "status": "",
+        "time": "",
+    },
+    "FAA Project": {
+        "data": {
+            "dynamic": "PR #89 compliance CI failing + 5 comments; PR #85 等 review",
+            "recommendation": "修 PR #89 的 CI, 处理 5 个 review comments",
+            "last_command_summary": "Update compliance checks for FAA audit",
+        },
+        "status": "running",
+        "time": "5h ago",
+    },
+    "Internal Tool": {
+        "data": {
+            "dynamic": "PR #15 docs update approved + CI green — 可以直接 merge",
+            "recommendation": "Merge PR #15 (docs update)",
+            "last_command_summary": "",
+        },
+        "status": "",
+        "time": "",
+    },
+}
+
 DEMO_SUGGESTIONS = [
     {
         "priority": "high",

@@ -776,6 +776,53 @@ class PortfolioScreen(Screen):
             self._selected_index = 0
             self._update_selection()
 
+        # Trigger card summary generation for demo mode
+        if _is_demo(self) and self._cards:
+            self._apply_demo_card_data()
+
+    def _apply_demo_card_data(self) -> None:
+        """Apply demo card data to cards in demo mode."""
+        from pm.ai.demo import DEMO_CARD_SUMMARIES
+        for card in self._cards:
+            card_data = DEMO_CARD_SUMMARIES.get(card.project.name)
+            if card_data:
+                card.set_card_data(
+                    card_data.get("data", {}),
+                    status=card_data.get("status", ""),
+                    time=card_data.get("time", ""),
+                )
+
+    def _start_card_summaries(self) -> None:
+        """Generate AI summaries for all cards in background."""
+        self.run_worker(self._card_summaries_worker, name="card_summaries", thread=True)
+
+    async def _card_summaries_worker(self) -> list[tuple[str, dict, str, str]]:
+        """Collect context and generate card summaries for all cards."""
+        from pm.ai.card_summary import CardSummaryGenerator, collect_card_context
+
+        results: list[tuple[str, dict, str, str]] = []
+        token = _get_credential_token() or ""
+        generator = CardSummaryGenerator(db=None)
+
+        for card in self._cards:
+            try:
+                context = collect_card_context(
+                    card.project.name,
+                    card.project.repos,
+                    token,
+                    db=None,
+                )
+                summary = generator.generate(card.project.name, context)
+                results.append((
+                    card.project.name,
+                    summary,
+                    context.last_command_status,
+                    context.last_command_time,
+                ))
+            except Exception:
+                pass
+        return results
+
     def _update_selection(self) -> None:
         for i, card in enumerate(self._cards):
             card.selected = i == self._selected_index
@@ -1025,6 +1072,19 @@ class PortfolioScreen(Screen):
             self.set_timer(3, lambda: status_bar.set_message(""))
             return
 
+        if event.worker.name == "card_summaries" and event.state == WorkerState.SUCCESS:
+            result = event.worker.result
+            if result:
+                card_map = {card.project.name: card for card in self._cards}
+                for name, data, status, time_str in result:
+                    card = card_map.get(name)
+                    if card:
+                        card.set_card_data(data, status=status, time=time_str)
+            return
+
+        if event.worker.name == "card_summaries" and event.state == WorkerState.ERROR:
+            return
+
         if event.worker.name == "live_fetch" and event.state == WorkerState.SUCCESS:
             self._live_loading = False
             result = event.worker.result
@@ -1040,6 +1100,7 @@ class PortfolioScreen(Screen):
                     )
                     self.set_timer(3, lambda: status_bar.set_message(""))
                     self._start_polling()
+                    self._start_card_summaries()
                     return
             status_bar = self.query_one(StatusBar)
             status_bar.set_message("Could not fetch live data")
