@@ -30,11 +30,11 @@ class TestPrsCommand:
         assert result.exit_code == 0
         assert "Pull Requests" in result.output
 
-    def test_prs_shows_sample_data(self, runner):
+    def test_prs_shows_data_or_setup_message(self, runner):
         result = runner.invoke(main, ["prs"])
         assert result.exit_code == 0
-        # Should show PR data or empty state
-        assert "Repo" in result.output or "sample" in result.output.lower() or "No open pull requests" in result.output
+        # Should show PR data or a setup message
+        assert "Repo" in result.output or "No config" in result.output or "No open pull requests" in result.output
 
 
 class TestOverlayCommand:
@@ -77,9 +77,9 @@ class TestMainCommand:
         assert "PM" in result.output
         assert "Portfolio" in result.output or "portfolio" in result.output
 
-    def test_demo_flag_exists(self, runner):
+    def test_demo_flag_removed(self, runner):
         result = runner.invoke(main, ["--help"])
-        assert "--demo" in result.output
+        assert "--demo" not in result.output
 
     def test_subcommands_listed(self, runner):
         result = runner.invoke(main, ["--help"])

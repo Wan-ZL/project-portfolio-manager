@@ -12,6 +12,8 @@ from pm.tui.widgets.project_card import ProjectCard
 from pm.tui.widgets.project_list import ProjectInfo
 from pm.tui.widgets.session_list import SessionInfo
 
+from tests.conftest import make_seeded_app
+
 
 def make_project():
     return ProjectInfo(
@@ -74,7 +76,7 @@ async def test_session_list_item_has_click_handler():
 @pytest.mark.asyncio
 async def test_portfolio_project_cards_exist():
     """Portfolio should have clickable ProjectCard widgets."""
-    app = PMApp(demo=True)
+    app = make_seeded_app()
     async with app.run_test() as pilot:
         cards = app.query(ProjectCard)
         assert len(cards) == 4

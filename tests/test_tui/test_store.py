@@ -191,59 +191,6 @@ class TestPollRefresh:
         assert pd.card_summary == {"dynamic": "important"}
 
 
-class TestLoadDemo:
-    def test_populates_all_data(self):
-        store = DataStore()
-        store.load_demo()
-
-        ordered = store.get_projects_ordered()
-        assert len(ordered) == 4
-
-        names = [pd.info.name for pd in ordered]
-        assert "401K Website" in names
-        assert "Side Project" in names
-        assert "FAA Project" in names
-        assert "Internal Tool" in names
-
-    def test_demo_has_prs(self):
-        store = DataStore()
-        store.load_demo()
-
-        pd = store.get_project("401K Website")
-        assert pd is not None
-        assert len(pd.prs) > 0
-
-    def test_demo_has_sessions(self):
-        store = DataStore()
-        store.load_demo()
-
-        pd = store.get_project("401K Website")
-        assert pd is not None
-        assert len(pd.sessions) > 0
-
-    def test_demo_has_ai_summaries(self):
-        store = DataStore()
-        store.load_demo()
-
-        pd = store.get_project("401K Website")
-        assert pd is not None
-        assert pd.ai_summary is not None
-
-    def test_demo_has_card_summaries(self):
-        store = DataStore()
-        store.load_demo()
-
-        pd = store.get_project("401K Website")
-        assert pd is not None
-        assert pd.card_summary is not None
-        assert "dynamic" in pd.card_summary
-
-    def test_demo_sets_is_demo(self):
-        store = DataStore()
-        store.load_demo()
-        assert store._state.is_demo is True
-
-
 class TestGetProject:
     def test_returns_correct_data(self):
         store = DataStore()
@@ -335,5 +282,4 @@ class TestStoreState:
         assert state.project_order == []
         assert state.selected_project == ""
         assert state.is_loading is False
-        assert state.is_demo is False
         assert state.error_message == ""

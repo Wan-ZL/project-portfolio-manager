@@ -6,15 +6,14 @@ from rich.table import Table
 
 
 @click.group(invoke_without_command=True)
-@click.option("--demo", is_flag=True, default=False, help="Launch in demo mode with mock data")
 @click.pass_context
-def main(ctx, demo):
+def main(ctx):
     """PPM - AI-powered Project Portfolio Manager"""
     if ctx.invoked_subcommand is None:
         from pm.errors import setup_logging
         setup_logging()
         from pm.tui.app import run_app
-        run_app(demo=demo)
+        run_app()
 
 
 @main.command()
@@ -47,15 +46,7 @@ def status():
                 "[green]\u25cf[/green]",
             )
     else:
-        # Demo/sample data
-        projects = [
-            ("401K Website", "Personal", "2", "claude-code", "[green]\u25cf[/green]"),
-            ("Side Project", "Personal", "1", "claude-code", "[yellow]\u25cf[/yellow]"),
-            ("FAA Project", "Company", "2", "claude-code", "[red]\u25cf[/red]"),
-            ("Internal Tool", "Company", "1", "claude-code", "[green]\u25cf[/green]"),
-        ]
-        for name, account, repos, agent, status_icon in projects:
-            table.add_row(name, account, repos, agent, status_icon)
+        console.print("[dim]No projects configured. Run [bold]ppm[/bold] to set up.[/dim]")
 
     console.print(table)
     console.print()
@@ -108,22 +99,7 @@ def prs():
     except Exception:
         pass
 
-    # Fallback sample data
-    console.print("[dim]Showing sample data (no config or GitHub connection)[/dim]\n")
-    table = Table(show_header=True, header_style="bold cyan", border_style="dim")
-    table.add_column("Repo", style="dim")
-    table.add_column("#", justify="right", style="bold")
-    table.add_column("Title")
-    table.add_column("CI", justify="center")
-    table.add_column("Review", justify="center")
-    sample = [
-        ("owner/401k-frontend", "42", "Fix auth bug", "[red]\u2718[/red]", "[yellow]\u270e[/yellow]"),
-        ("owner/401k-frontend", "38", "Mobile responsive", "[green]\u2714[/green]", "[green]\u2714[/green]"),
-        ("company-org/faa-main", "89", "Compliance checks", "[red]\u2718[/red]", "[yellow]\u270e[/yellow]"),
-    ]
-    for repo, num, title, ci, review in sample:
-        table.add_row(repo, num, title, ci, review)
-    console.print(table)
+    console.print("[dim]No config or GitHub connection. Run [bold]ppm[/bold] to set up.[/dim]")
     console.print()
 
 

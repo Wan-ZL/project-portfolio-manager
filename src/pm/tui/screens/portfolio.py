@@ -15,13 +15,6 @@ from pm.tui.widgets.session_list import SessionInfo
 from pm.tui.widgets.status_bar import StatusBar
 
 
-def _is_demo(screen) -> bool:
-    try:
-        return getattr(screen.app, '_demo', False) or getattr(screen.app, 'demo_mode', False)
-    except Exception:
-        return False
-
-
 def _get_account_display_names() -> dict[str, str]:
     try:
         from pm.auth.credentials import load_credentials
@@ -140,7 +133,6 @@ class PortfolioScreen(Screen):
         Binding("s", "open_settings", "Settings"),
         Binding("r", "refresh", "Refresh"),
         Binding("question_mark", "help", "Help"),
-        Binding("d", "toggle_demo", "Demo", show=False),
         Binding("ctrl+p", "noop", "", show=False),
     ]
 
@@ -158,8 +150,7 @@ class PortfolioScreen(Screen):
                 "[bold cyan]Welcome to PPM![/bold cyan]\n\n"
                 "No GitHub accounts connected yet.\n\n"
                 "Press [bold][s][/bold] to open Settings\n"
-                "and connect your GitHub account.\n\n"
-                "Press [bold][d][/bold] to view demo data.\n",
+                "and connect your GitHub account.\n",
                 id="empty-state-text",
             ),
             id="empty-state-container",
@@ -174,20 +165,15 @@ class PortfolioScreen(Screen):
     def on_mount(self) -> None:
         store = self.app.store
 
-        if _is_demo(self):
-            store.load_demo()
+        result = store.load_initial()
+        if result == "no_credentials":
+            self._show_empty_state()
+        elif result == "no_repos":
+            self._show_no_repos_state()
+        else:
             self._show_cards_view()
             self._render_cards()
-        else:
-            result = store.load_initial()
-            if result == "no_credentials":
-                self._show_empty_state()
-            elif result == "no_repos":
-                self._show_no_repos_state()
-            else:
-                self._show_cards_view()
-                self._render_cards()
-                self._start_live_loading()
+            self._start_live_loading()
 
         self._show_recovery_notification()
 
@@ -221,8 +207,7 @@ class PortfolioScreen(Screen):
         empty_text.update(
             "\n\n"
             "[bold cyan]No repos selected[/bold cyan]\n\n"
-            "Press [bold][s][/bold] to open Settings and choose repos.\n\n"
-            "Press [bold][d][/bold] to view demo data.\n"
+            "Press [bold][s][/bold] to open Settings and choose repos.\n"
         )
         empty = self.query_one("#empty-state-container")
         empty.add_class("visible")
@@ -340,8 +325,6 @@ class PortfolioScreen(Screen):
         self._poll_timer = self.set_interval(30, self._poll_tick)
 
     async def _poll_tick(self) -> None:
-        if _is_demo(self):
-            return
         self.run_worker(self._poll_worker, name="poll", thread=True)
 
     async def _poll_worker(self) -> tuple[list[ProjectInfo], dict[str, list[EnhancedPR]]] | None:
@@ -427,11 +410,7 @@ class PortfolioScreen(Screen):
         status_bar.set_message("Refreshing... (cache invalidated)")
         store = self.app.store
 
-        if _is_demo(self):
-            store.load_demo()
-            self._render_cards()
-            self.set_timer(2, lambda: status_bar.set_message(""))
-        elif store.has_credentials():
+        if store.has_credentials():
             self._show_cards_view()
             result = store.load_initial()
             if result == "no_repos":
@@ -459,14 +438,6 @@ class PortfolioScreen(Screen):
                 self._show_no_repos_state()
         else:
             self._show_empty_state()
-
-    def action_toggle_demo(self) -> None:
-        self._show_cards_view()
-        self.app.store.load_demo()
-        self._render_cards()
-        status_bar = self.query_one(StatusBar)
-        status_bar.set_message("Demo mode activated")
-        self.set_timer(3, lambda: status_bar.set_message(""))
 
     def action_help(self) -> None:
         from pm.tui.screens.help import HelpScreen

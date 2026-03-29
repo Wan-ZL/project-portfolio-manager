@@ -53,6 +53,10 @@ packages = ["src/pm"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_mode = "auto"
+addopts = "-m 'not integration'"
+markers = [
+    "integration: tests that use real GitHub API (deselect with '-m not integration')",
+]
 
 [dependency-groups]
 dev = [

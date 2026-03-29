@@ -12,7 +12,6 @@ from pm.tui.store import (
     _has_credentials,
     _fetch_live_projects_and_prs,
 )
-from pm.tui.widgets.project_card import ProjectCard
 from pm.tui.widgets.project_list import ProjectInfo
 from pm.tui.widgets.status_bar import StatusBar
 from pm.github.pr import EnhancedPR
@@ -180,10 +179,9 @@ class TestFetchLiveProjectsAndPrs:
 class TestTUILiveMode:
     @pytest.mark.asyncio
     @patch("pm.tui.store._has_credentials", return_value=False)
-    @patch("pm.tui.screens.portfolio._is_demo", return_value=False)
-    async def test_no_credentials_shows_empty_state(self, mock_demo, mock_creds):
-        """Without credentials and not in demo mode, show empty state."""
-        app = PMApp(demo=False)
+    async def test_no_credentials_shows_empty_state(self, mock_creds):
+        """Without credentials, show empty state."""
+        app = PMApp()
         async with app.run_test() as pilot:
             # Empty state should be visible
             empty = app.query_one("#empty-state-container")
@@ -191,14 +189,3 @@ class TestTUILiveMode:
             # Cards scroll should be hidden
             scroll = app.query_one("#cards-scroll")
             assert "hidden" in scroll.classes
-
-    @pytest.mark.asyncio
-    async def test_demo_flag_shows_demo_data(self):
-        """With --demo flag, always show demo data."""
-        app = PMApp(demo=True)
-        async with app.run_test() as pilot:
-            cards = app.query(ProjectCard)
-            assert len(cards) == 4
-            screen = app.screen
-            assert isinstance(screen, PortfolioScreen)
-            assert screen.current_project.name == "401K Website"

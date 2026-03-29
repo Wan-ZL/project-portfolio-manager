@@ -462,9 +462,10 @@ async def test_comma_opens_settings_from_portfolio():
 
 
 @pytest.mark.asyncio
-async def test_demo_mode_shows_portfolio_not_empty():
-    """In demo mode, cards scroll should be visible, not the empty state."""
-    app = PMApp(demo=True)
+async def test_with_data_shows_portfolio_not_empty():
+    """With store data, cards scroll should be visible, not the empty state."""
+    from tests.conftest import make_seeded_app
+    app = make_seeded_app()
     async with app.run_test() as pilot:
         assert isinstance(app.screen, PortfolioScreen)
         scroll = app.query_one("#cards-scroll")

@@ -35,7 +35,6 @@ class StoreState:
     project_order: list[str] = field(default_factory=list)
     selected_project: str = ""
     is_loading: bool = False
-    is_demo: bool = False
     error_message: str = ""
 
 
@@ -401,39 +400,6 @@ class DataStore:
             if pd:
                 result.append(pd)
         return result
-
-    def load_demo(self) -> None:
-        from pm.ai.demo import (
-            get_demo_projects,
-            get_demo_prs,
-            get_demo_sessions,
-            DEMO_SUMMARIES,
-            DEMO_CARD_SUMMARIES,
-        )
-
-        self._state.is_demo = True
-        projects = get_demo_projects()
-        prs = {}
-        sessions = {}
-        for p in projects:
-            prs[p.name] = get_demo_prs(p.name)
-            sessions[p.name] = get_demo_sessions(p.name)
-
-        self.set_projects(projects, prs=prs, sessions=sessions)
-
-        for p in projects:
-            summary = DEMO_SUMMARIES.get(p.name)
-            if summary:
-                self.set_ai_summary(p.name, summary)
-
-            card_data = DEMO_CARD_SUMMARIES.get(p.name)
-            if card_data:
-                self.set_card_summary(
-                    p.name,
-                    card_data.get("data", {}),
-                    status=card_data.get("status", ""),
-                    time=card_data.get("time", ""),
-                )
 
     def load_initial(self) -> str:
         if not _has_credentials():

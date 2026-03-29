@@ -6,6 +6,8 @@ from pm.tui.app import PMApp
 from pm.tui.screens.portfolio import PortfolioScreen
 from pm.tui.widgets.project_card import ProjectCard
 
+from tests.conftest import make_seeded_app
+
 
 @pytest.mark.asyncio
 async def test_app_launches():
@@ -24,7 +26,7 @@ async def test_portfolio_screen_mounted():
 
 @pytest.mark.asyncio
 async def test_project_cards_render():
-    app = PMApp(demo=True)
+    app = make_seeded_app()
     async with app.run_test() as pilot:
         cards = app.query(ProjectCard)
         assert len(cards) == 4
@@ -32,7 +34,7 @@ async def test_project_cards_render():
 
 @pytest.mark.asyncio
 async def test_keyboard_navigation_down():
-    app = PMApp(demo=True)
+    app = make_seeded_app()
     async with app.run_test() as pilot:
         screen = app.screen
         assert isinstance(screen, PortfolioScreen)
@@ -47,7 +49,7 @@ async def test_keyboard_navigation_down():
 
 @pytest.mark.asyncio
 async def test_keyboard_navigation_up():
-    app = PMApp(demo=True)
+    app = make_seeded_app()
     async with app.run_test() as pilot:
         screen = app.screen
         assert isinstance(screen, PortfolioScreen)
@@ -62,7 +64,7 @@ async def test_keyboard_navigation_up():
 
 @pytest.mark.asyncio
 async def test_keyboard_navigation_bounds():
-    app = PMApp(demo=True)
+    app = make_seeded_app()
     async with app.run_test() as pilot:
         screen = app.screen
         assert isinstance(screen, PortfolioScreen)
@@ -79,7 +81,7 @@ async def test_keyboard_navigation_bounds():
 
 @pytest.mark.asyncio
 async def test_first_project_selected_on_mount():
-    app = PMApp(demo=True)
+    app = make_seeded_app()
     async with app.run_test() as pilot:
         screen = app.screen
         assert isinstance(screen, PortfolioScreen)
@@ -100,7 +102,7 @@ async def test_quit_binding():
 @pytest.mark.asyncio
 async def test_card_has_three_lines():
     """Each card should have exactly 3 Static children (line1, line2, line3)."""
-    app = PMApp(demo=True)
+    app = make_seeded_app()
     async with app.run_test() as pilot:
         from textual.widgets import Static
         cards = list(app.query(ProjectCard))
@@ -113,7 +115,7 @@ async def test_card_has_three_lines():
 @pytest.mark.asyncio
 async def test_card_line1_has_name():
     """Line 1 should contain the project name."""
-    app = PMApp(demo=True)
+    app = make_seeded_app()
     async with app.run_test() as pilot:
         from textual.widgets import Static
         cards = list(app.query(ProjectCard))
@@ -126,7 +128,7 @@ async def test_card_line1_has_name():
 @pytest.mark.asyncio
 async def test_card_set_card_data():
     """set_card_data should update the card's _card_data."""
-    app = PMApp(demo=True)
+    app = make_seeded_app()
     async with app.run_test() as pilot:
         cards = list(app.query(ProjectCard))
         card = cards[0]
@@ -142,12 +144,17 @@ async def test_card_set_card_data():
 
 
 @pytest.mark.asyncio
-async def test_demo_card_summaries_applied():
-    """In demo mode, card data should be populated from DEMO_CARD_SUMMARIES."""
-    app = PMApp(demo=True)
+async def test_card_summaries_applied():
+    """Card data should be populated when set via store."""
+    app = make_seeded_app()
+    app.store.set_card_summary(
+        "401K Website",
+        {"dynamic": "PR #42 auth fix CI failing", "recommendation": "Fix CI", "last_command_summary": ""},
+        status="running",
+        time="2h ago",
+    )
     async with app.run_test() as pilot:
         cards = list(app.query(ProjectCard))
-        # 401K Website should have card data from demo
         first_card = cards[0]
         assert first_card._card_data is not None
         assert "PR #42" in first_card._card_data.get("dynamic", "")

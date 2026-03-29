@@ -26,12 +26,10 @@ class PMApp(App):
     def action_noop(self) -> None:
         pass
 
-    def __init__(self, demo: bool = False, **kwargs):
+    def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self._demo = demo
         self._recovered_sessions: list[dict] = []
         self.store = DataStore(self)
-        self.store._state.is_demo = demo
 
     DEFAULT_CSS = """
     Screen {
@@ -94,13 +92,8 @@ class PMApp(App):
         "settings": SettingsScreen,
     }
 
-    @property
-    def demo_mode(self) -> bool:
-        return self._demo
-
     def on_mount(self) -> None:
-        if not self._demo:
-            self._run_crash_recovery()
+        self._run_crash_recovery()
         self.push_screen(PortfolioScreen())
 
     def _run_crash_recovery(self) -> None:
@@ -129,12 +122,9 @@ class PMApp(App):
             self.screen.action_refresh()
 
 
-def run_app(demo: bool = False) -> None:
+def run_app() -> None:
     from pm.errors import setup_logging
     setup_logging()
 
-    # Only auto-enable demo if explicitly requested via --demo flag.
-    # Without --demo, the TUI will show an empty state with guidance
-    # to connect a GitHub account via Settings (comma key).
-    app = PMApp(demo=demo)
+    app = PMApp()
     app.run()
