@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 from datetime import datetime
 
 from textual.app import ComposeResult
@@ -19,158 +18,6 @@ from pm.tui.widgets.session_list import SessionInfo
 from pm.tui.widgets.status_bar import StatusBar
 
 
-def get_sample_projects() -> list[ProjectInfo]:
-    return [
-        ProjectInfo(
-            name="401K Website",
-            account="Personal",
-            repos=["owner/401k-frontend", "owner/401k-backend"],
-            open_prs=5,
-            active_sessions=1,
-            status="green",
-            summary=(
-                "Frontend development is progressing well. The mobile responsive "
-                "redesign is 80% complete. Backend auth module has a bug in the "
-                "login flow that needs attention before the next release."
-            ),
-            instructions="Focus on mobile responsive design.\nUse Tailwind CSS for styling.",
-            assets=["~/designs/401k-mockup.png"],
-        ),
-        ProjectInfo(
-            name="Side Project",
-            account="Personal",
-            repos=["owner/side-project"],
-            open_prs=2,
-            active_sessions=0,
-            status="yellow",
-            summary=(
-                "Project has been idle for 2 weeks. Two PRs are awaiting review. "
-                "Consider prioritizing the dependency update PR to avoid security issues."
-            ),
-        ),
-        ProjectInfo(
-            name="FAA Project",
-            account="Company",
-            repos=["company-org/faa-main", "company-org/faa-docs"],
-            open_prs=8,
-            active_sessions=2,
-            status="red",
-            summary=(
-                "CI is failing on the main branch. Three PRs have unresolved review "
-                "comments. The compliance documentation update is blocked on the "
-                "API schema changes."
-            ),
-            instructions="Follow FAA compliance guidelines.",
-        ),
-        ProjectInfo(
-            name="Internal Tool",
-            account="Company",
-            repos=["company-org/internal-tool"],
-            open_prs=1,
-            active_sessions=0,
-            status="green",
-            summary=(
-                "Stable and up to date. The single open PR is a minor docs update "
-                "that's approved and ready to merge."
-            ),
-        ),
-    ]
-
-
-def get_sample_prs(project_name: str) -> list[EnhancedPR]:
-    prs_data: dict[str, list[EnhancedPR]] = {
-        "401K Website": [
-            EnhancedPR(
-                repo_id="owner/401k-frontend", number=42, title="Fix auth bug in login flow",
-                state="open", author="ai-bot", ci_status="failing", review_status="changes_requested",
-                created_at=datetime(2026, 3, 20), updated_at=datetime(2026, 3, 25),
-                unresolved_count=3, needs_attention=True,
-            ),
-            EnhancedPR(
-                repo_id="owner/401k-frontend", number=38, title="Add mobile responsive layout",
-                state="open", author="ai-bot", ci_status="passing", review_status="approved",
-                created_at=datetime(2026, 3, 18), updated_at=datetime(2026, 3, 24),
-            ),
-            EnhancedPR(
-                repo_id="owner/401k-frontend", number=35, title="Refactor component structure",
-                state="open", author="zelin", ci_status="passing", review_status="pending",
-                created_at=datetime(2026, 3, 15), updated_at=datetime(2026, 3, 22),
-            ),
-            EnhancedPR(
-                repo_id="owner/401k-backend", number=12, title="API endpoint update",
-                state="open", author="zelin", ci_status="passing", review_status="approved",
-                created_at=datetime(2026, 3, 10), updated_at=datetime(2026, 3, 20),
-            ),
-            EnhancedPR(
-                repo_id="owner/401k-backend", number=10, title="Database migration v2",
-                state="open", author="ai-bot", ci_status="pending", review_status="pending",
-                created_at=datetime(2026, 3, 8), updated_at=datetime(2026, 3, 19),
-            ),
-        ],
-        "Side Project": [
-            EnhancedPR(
-                repo_id="owner/side-project", number=7, title="Update dependencies",
-                state="open", author="dependabot", ci_status="passing", review_status="pending",
-                created_at=datetime(2026, 3, 12), updated_at=datetime(2026, 3, 12),
-            ),
-            EnhancedPR(
-                repo_id="owner/side-project", number=5, title="Add dark mode support",
-                state="open", author="zelin", ci_status="passing", review_status="pending",
-                created_at=datetime(2026, 3, 5), updated_at=datetime(2026, 3, 10),
-            ),
-        ],
-        "FAA Project": [
-            EnhancedPR(
-                repo_id="company-org/faa-main", number=89, title="Update compliance checks",
-                state="open", author="ai-bot", ci_status="failing", review_status="changes_requested",
-                created_at=datetime(2026, 3, 22), updated_at=datetime(2026, 3, 25),
-                unresolved_count=5, needs_attention=True,
-            ),
-            EnhancedPR(
-                repo_id="company-org/faa-main", number=85, title="Add new API validation",
-                state="open", author="colleague", ci_status="passing", review_status="pending",
-                created_at=datetime(2026, 3, 20), updated_at=datetime(2026, 3, 24),
-            ),
-        ],
-        "Internal Tool": [
-            EnhancedPR(
-                repo_id="company-org/internal-tool", number=15, title="Update README docs",
-                state="open", author="zelin", ci_status="passing", review_status="approved",
-                created_at=datetime(2026, 3, 24), updated_at=datetime(2026, 3, 25),
-            ),
-        ],
-    }
-    return prs_data.get(project_name, [])
-
-
-def get_sample_sessions(project_name: str) -> list[SessionInfo]:
-    sessions_data: dict[str, list[SessionInfo]] = {
-        "401K Website": [
-            SessionInfo(
-                id="s-001", project="401K Website", task="Fix auth bug",
-                agent="claude-code", status="running",
-                created_at=datetime(2026, 3, 25, 14, 30),
-                branch="pm/fix-auth", pr_number=42,
-            ),
-        ],
-        "FAA Project": [
-            SessionInfo(
-                id="s-002", project="FAA Project", task="Update compliance",
-                agent="claude-code", status="running",
-                created_at=datetime(2026, 3, 25, 10, 0),
-                branch="pm/compliance", pr_number=89,
-            ),
-            SessionInfo(
-                id="s-003", project="FAA Project", task="Fix CI pipeline",
-                agent="claude-code", status="paused",
-                created_at=datetime(2026, 3, 24, 16, 0),
-                branch="pm/fix-ci",
-            ),
-        ],
-    }
-    return sessions_data.get(project_name, [])
-
-
 def _is_demo(screen) -> bool:
     """Check if the app is in demo mode."""
     try:
@@ -180,7 +27,7 @@ def _is_demo(screen) -> bool:
 
 
 def _get_projects(screen) -> list[ProjectInfo]:
-    """Get projects - demo or sample data."""
+    """Get projects - demo data or from config. Never returns sample/fake data."""
     if _is_demo(screen):
         from pm.ai.demo import get_demo_projects
         return get_demo_projects()
@@ -205,11 +52,11 @@ def _get_projects(screen) -> list[ProjectInfo]:
             return projects
     except Exception:
         pass
-    return get_sample_projects()
+    return []
 
 
 def _get_prs(screen, project_name: str) -> list[EnhancedPR]:
-    """Get PRs - demo or sample data."""
+    """Get PRs - demo data or from live cache. Never returns sample/fake data."""
     if _is_demo(screen):
         from pm.ai.demo import get_demo_prs
         return get_demo_prs(project_name)
@@ -220,15 +67,15 @@ def _get_prs(screen, project_name: str) -> list[EnhancedPR]:
             return live_prs[project_name]
     except Exception:
         pass
-    return get_sample_prs(project_name)
+    return []
 
 
 def _get_sessions(screen, project_name: str) -> list[SessionInfo]:
-    """Get sessions - demo or sample data."""
+    """Get sessions - demo data or empty. Never returns sample/fake data."""
     if _is_demo(screen):
         from pm.ai.demo import get_demo_sessions
         return get_demo_sessions(project_name)
-    return get_sample_sessions(project_name)
+    return []
 
 
 def _get_ai_summary(screen, project_name: str) -> dict | None:
@@ -658,12 +505,11 @@ class PortfolioScreen(Screen):
             self._ai_summaries = dict(DEMO_SUMMARIES)
             self._ai_suggestions = list(DEMO_SUGGESTIONS)
         elif _has_credentials():
-            # Check if any repos are selected or config has real projects
             has_selections = _has_selected_repos_or_config()
             self._show_cards_view()
             if has_selections:
-                projects = _get_projects(self)
-                self._set_projects(projects)
+                placeholders = self._build_loading_placeholders()
+                self._set_projects(placeholders)
                 self._start_live_loading()
             else:
                 self._show_no_repos_state()
@@ -717,6 +563,33 @@ class PortfolioScreen(Screen):
         empty.remove_class("visible")
         scroll = self.query_one("#cards-scroll")
         scroll.remove_class("hidden")
+
+    def _build_loading_placeholders(self) -> list[ProjectInfo]:
+        """Create placeholder cards from selected repos/config with 'Loading...' state."""
+        # First try config-based projects
+        projects = _get_projects(self)
+        if projects:
+            return projects
+        # Fall back to building from credentials selected_repos
+        try:
+            from pm.auth.credentials import load_credentials
+            creds = load_credentials()
+            placeholders = []
+            for account_id, data in creds.get("accounts", {}).items():
+                for repo in data.get("selected_repos", []):
+                    repo_name = repo.split("/")[-1] if "/" in repo else repo
+                    placeholders.append(ProjectInfo(
+                        name=repo_name,
+                        account=account_id,
+                        repos=[repo],
+                        open_prs=0,
+                        active_sessions=0,
+                        status="gray",
+                        summary="Loading...",
+                    ))
+            return placeholders
+        except Exception:
+            return []
 
     def _set_projects(self, projects: list[ProjectInfo]) -> None:
         """Build the card list grouped by account."""
@@ -967,10 +840,11 @@ class PortfolioScreen(Screen):
             if self._poller is not None:
                 self.run_worker(self._force_refresh_worker, name="force_refresh", thread=True)
             else:
+                self._show_cards_view()
+                placeholders = self._build_loading_placeholders()
+                self._set_projects(placeholders)
                 self._start_live_loading()
         else:
-            projects = _get_projects(self)
-            self._set_projects(projects)
             self.set_timer(2, lambda: status_bar.set_message(""))
 
     async def _force_refresh_worker(self) -> PollingUpdate | None:
@@ -988,6 +862,8 @@ class PortfolioScreen(Screen):
             if has_selections:
                 self._show_cards_view()
                 self._live_prs.clear()
+                placeholders = self._build_loading_placeholders()
+                self._set_projects(placeholders)
                 self._start_live_loading()
             else:
                 self._show_no_repos_state()
@@ -1102,6 +978,16 @@ class PortfolioScreen(Screen):
                     self._start_polling()
                     self._start_card_summaries()
                     return
+            # Clear loading placeholders and show error
+            scroll = self.query_one("#cards-scroll", VerticalScroll)
+            scroll.remove_children()
+            self._cards = []
+            self._projects = []
+            scroll.mount(Static(
+                "[yellow]Could not connect to GitHub.[/yellow]\n"
+                "Press [bold][r][/bold] to retry.",
+                classes="empty-state",
+            ))
             status_bar = self.query_one(StatusBar)
             status_bar.set_message("Could not fetch live data")
             self.set_timer(3, lambda: status_bar.set_message(""))
@@ -1110,10 +996,19 @@ class PortfolioScreen(Screen):
 
         if event.worker.name == "live_fetch" and event.state == WorkerState.ERROR:
             self._live_loading = False
+            # Clear loading placeholders and show error
+            scroll = self.query_one("#cards-scroll", VerticalScroll)
+            scroll.remove_children()
+            self._cards = []
+            self._projects = []
+            scroll.mount(Static(
+                "[yellow]Could not connect to GitHub.[/yellow]\n"
+                "Press [bold][r][/bold] to retry.",
+                classes="empty-state",
+            ))
             status_bar = self.query_one(StatusBar)
             status_bar.set_message("Failed to fetch GitHub data")
             self.set_timer(3, lambda: status_bar.set_message(""))
-            self._start_polling()
             return
 
         if event.state == WorkerState.SUCCESS and self._loading_suggestions:

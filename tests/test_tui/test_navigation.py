@@ -13,7 +13,7 @@ from pm.tui.screens.task import TaskScreen
 @pytest.mark.asyncio
 async def test_portfolio_to_project_navigation():
     """Test: Portfolio View --Enter--> Project View"""
-    app = PMApp()
+    app = PMApp(demo=True)
     async with app.run_test() as pilot:
         # Start at Portfolio
         assert isinstance(app.screen, PortfolioScreen)
@@ -29,7 +29,7 @@ async def test_portfolio_to_project_navigation():
 @pytest.mark.asyncio
 async def test_project_to_portfolio_navigation():
     """Test: Project View --Esc--> Portfolio View"""
-    app = PMApp()
+    app = PMApp(demo=True)
     async with app.run_test() as pilot:
         # Navigate to project
         await pilot.press("enter")
@@ -45,7 +45,7 @@ async def test_project_to_portfolio_navigation():
 @pytest.mark.asyncio
 async def test_navigate_to_different_projects():
     """Test navigating to different projects"""
-    app = PMApp()
+    app = PMApp(demo=True)
     async with app.run_test() as pilot:
         # Enter first project (401K Website)
         await pilot.press("enter")
@@ -69,7 +69,7 @@ async def test_navigate_to_different_projects():
 @pytest.mark.asyncio
 async def test_project_to_task_navigation():
     """Test: Project View --Enter on session--> Task View"""
-    app = PMApp()
+    app = PMApp(demo=True)
     async with app.run_test() as pilot:
         # Navigate to 401K Website (has sessions)
         await pilot.press("enter")
@@ -92,7 +92,7 @@ async def test_project_to_task_navigation():
 @pytest.mark.asyncio
 async def test_task_to_project_navigation():
     """Test: Task View --Esc--> Project View"""
-    app = PMApp()
+    app = PMApp(demo=True)
     async with app.run_test() as pilot:
         # Navigate to task
         await pilot.press("enter")
@@ -112,7 +112,7 @@ async def test_task_to_project_navigation():
 @pytest.mark.asyncio
 async def test_full_navigation_flow():
     """Test: Portfolio -> Project -> Task -> Project -> Portfolio"""
-    app = PMApp()
+    app = PMApp(demo=True)
     async with app.run_test() as pilot:
         # 1. Portfolio
         assert isinstance(app.screen, PortfolioScreen)

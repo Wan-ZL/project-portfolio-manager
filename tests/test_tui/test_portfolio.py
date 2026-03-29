@@ -24,7 +24,7 @@ async def test_portfolio_screen_mounted():
 
 @pytest.mark.asyncio
 async def test_project_cards_render():
-    app = PMApp()
+    app = PMApp(demo=True)
     async with app.run_test() as pilot:
         cards = app.query(ProjectCard)
         assert len(cards) == 4
@@ -32,7 +32,7 @@ async def test_project_cards_render():
 
 @pytest.mark.asyncio
 async def test_keyboard_navigation_down():
-    app = PMApp()
+    app = PMApp(demo=True)
     async with app.run_test() as pilot:
         screen = app.screen
         assert isinstance(screen, PortfolioScreen)
@@ -47,7 +47,7 @@ async def test_keyboard_navigation_down():
 
 @pytest.mark.asyncio
 async def test_keyboard_navigation_up():
-    app = PMApp()
+    app = PMApp(demo=True)
     async with app.run_test() as pilot:
         screen = app.screen
         assert isinstance(screen, PortfolioScreen)
@@ -79,7 +79,7 @@ async def test_keyboard_navigation_bounds():
 
 @pytest.mark.asyncio
 async def test_first_project_selected_on_mount():
-    app = PMApp()
+    app = PMApp(demo=True)
     async with app.run_test() as pilot:
         screen = app.screen
         assert isinstance(screen, PortfolioScreen)
