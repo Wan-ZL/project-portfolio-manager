@@ -244,52 +244,26 @@ def test_parse_empty_response():
 
 # --- generate_fallback tests ---
 
-def test_fallback_with_prs():
-    ctx = CardContext(
-        project_name="proj",
-        open_prs=[{"number": 42, "title": "Fix auth bug", "ci_status": "failing"}],
-    )
+def test_fallback_shows_error():
+    ctx = CardContext(project_name="proj")
     result = generate_fallback(ctx)
-    assert "42" in result["dynamic"]
-    assert "CI" in result["recommendation"]
+    assert "AI 生成失败" in result["dynamic"]
+    assert result["recommendation"] == ""
 
 
-def test_fallback_with_commits():
-    ctx = CardContext(
-        project_name="proj",
-        recent_commits=[{"sha": "abc", "message": "update docs"}],
-    )
-    result = generate_fallback(ctx)
-    assert "update docs" in result["dynamic"]
-    assert "可以开始新任务" in result["recommendation"]
+def test_fallback_with_reason():
+    ctx = CardContext(project_name="proj")
+    result = generate_fallback(ctx, reason="model not found")
+    assert "model not found" in result["dynamic"]
 
 
-def test_fallback_idle():
-    ctx = CardContext(project_name="proj", days_since_last_activity=12)
-    result = generate_fallback(ctx)
-    assert "12" in result["dynamic"]
-    assert "闲置" in result["dynamic"]
-
-
-def test_fallback_failing_ci():
-    ctx = CardContext(
-        project_name="proj",
-        open_prs=[
-            {"number": 10, "title": "Good PR", "ci_status": "passing"},
-            {"number": 42, "title": "Bad PR", "ci_status": "failing"},
-        ],
-    )
-    result = generate_fallback(ctx)
-    assert "42" in result["recommendation"]
-
-
-def test_fallback_last_command_short():
+def test_fallback_preserves_last_command():
     ctx = CardContext(project_name="proj", last_command="fix bug")
     result = generate_fallback(ctx)
     assert result["last_command_summary"] == "fix bug"
 
 
-def test_fallback_last_command_long():
+def test_fallback_truncates_long_command():
     long_cmd = "A" * 100
     ctx = CardContext(project_name="proj", last_command=long_cmd)
     result = generate_fallback(ctx)
@@ -332,7 +306,7 @@ def test_generator_uses_fallback_without_key():
                 open_prs=[{"number": 42, "title": "Fix bug", "ci_status": "passing"}],
             )
             result = gen.generate("proj", ctx)
-            assert "42" in result["dynamic"]
+            assert "AI 生成失败" in result["dynamic"]
 
 
 def test_generator_memory_cache_hit():

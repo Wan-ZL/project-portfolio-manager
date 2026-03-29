@@ -311,7 +311,7 @@ def test_generator_returns_unavailable_message_without_key():
         with patch("pm.ai.summary.API_KEY_FILE", Path("/nonexistent")):
             gen = AISummaryGenerator(db=None)
             result = gen.generate_summary("proj", {"commits": []})
-            assert "unavailable" in result["one_line_status"].lower()
+            assert "AI 生成失败" in result["one_line_status"]
 
 
 def test_generator_uses_cache(db):
@@ -346,7 +346,7 @@ def test_generator_cache_miss_on_hash_change(db):
         with patch("pm.ai.summary.API_KEY_FILE", Path("/nonexistent")):
             gen = AISummaryGenerator(db=db)
             result = gen.generate_summary("proj", {"commits": ["new_data"]})
-            assert "unavailable" in result["one_line_status"].lower()
+            assert "AI 生成失败" in result["one_line_status"]
 
 
 def test_generator_force_bypasses_cache(db):
@@ -365,7 +365,7 @@ def test_generator_force_bypasses_cache(db):
         with patch("pm.ai.summary.API_KEY_FILE", Path("/nonexistent")):
             gen = AISummaryGenerator(db=db)
             result = gen.generate_summary("proj", input_data, force=True)
-            assert "unavailable" in result["one_line_status"].lower()
+            assert "AI 生成失败" in result["one_line_status"]
 
 
 def test_generator_full_flow_with_mock_api(db):

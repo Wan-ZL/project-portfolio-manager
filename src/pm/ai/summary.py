@@ -342,7 +342,7 @@ class AISummaryGenerator:
 
         if not self.available:
             return {
-                "one_line_status": "AI summary unavailable (no API key configured)",
+                "one_line_status": "⚠️ AI 生成失败 (no API key)",
                 "key_progress": [],
                 "needs_attention": [],
                 "suggested_next_steps": [],

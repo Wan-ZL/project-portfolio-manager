@@ -195,35 +195,12 @@ def parse_card_response(response_text: str) -> dict:
         }
 
 
-def generate_fallback(context: CardContext) -> dict:
-    # Dynamic: based on most recent PR or commit
-    if context.open_prs:
-        pr = context.open_prs[0]
-        ci = pr.get("ci_status", "")
-        ci_str = f" {ci}" if ci else ""
-        dynamic = f"PR #{pr.get('number', '?')} ({pr.get('title', '?')[:30]}){ci_str}"
-    elif context.recent_commits:
-        c = context.recent_commits[0]
-        dynamic = f"Latest commit: {c.get('message', '?')[:40]}"
-    else:
-        dynamic = f"闲置 {context.days_since_last_activity} 天"
-
-    # Recommendation: based on PR states
-    failing = [p for p in context.open_prs if p.get("ci_status") == "failing"]
-    if failing:
-        recommendation = f"修 PR #{failing[0].get('number', '?')} 的 CI"
-    elif context.open_prs:
-        recommendation = f"Review PR #{context.open_prs[0].get('number', '?')}"
-    else:
-        recommendation = "可以开始新任务"
-
-    # Last command: just truncate
-    summary = context.last_command[:40] if context.last_command else ""
-
+def generate_fallback(context: CardContext, reason: str = "no API key") -> dict:
+    """Return error indicator when AI generation fails."""
     return {
-        "dynamic": dynamic,
-        "recommendation": recommendation,
-        "last_command_summary": summary,
+        "dynamic": f"⚠️ AI 生成失败 ({reason})",
+        "recommendation": "",
+        "last_command_summary": context.last_command[:40] if context.last_command else "",
     }
 
 
@@ -271,9 +248,9 @@ class CardSummaryGenerator:
             except Exception:
                 pass
 
-        # If no AI available, use fallback
+        # If no AI available, show error
         if not self.available:
-            data = generate_fallback(context)
+            data = generate_fallback(context, reason="no API key")
             self._cache[project_name] = {"hash": input_hash, "data": data}
             return data
 
@@ -308,7 +285,7 @@ class CardSummaryGenerator:
             return parse_card_response(response_text)
         except Exception as e:
             logger.error(f"Failed to generate card summary for {project_name}: {e}")
-            return generate_fallback(context)
+            return generate_fallback(context, reason=str(e)[:50])
 
 
 # --- Data collection functions ---

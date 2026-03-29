@@ -194,7 +194,7 @@ class AISuggestionEngine:
                     pass
 
         if not self.available:
-            return self._generate_rule_based(projects_data)
+            return [Suggestion(priority="high", project="", action="⚠️ AI 生成失败 (no API key)", reason="")]
 
         prompt = build_suggest_prompt(projects_data)
 
@@ -209,7 +209,7 @@ class AISuggestionEngine:
             suggestions = parse_suggestions_response(response_text)
         except Exception as e:
             logger.error(f"Failed to generate suggestions: {e}")
-            suggestions = self._generate_rule_based(projects_data)
+            suggestions = [Suggestion(priority="high", project="", action=f"⚠️ AI 生成失败 ({str(e)[:50]})", reason="")]
 
         # Cache suggestions
         if self.db:
