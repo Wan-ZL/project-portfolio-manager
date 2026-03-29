@@ -476,7 +476,7 @@ def test_system_prompt_rejects_vague_language():
 
 
 def test_system_prompt_has_good_examples():
-    assert "PR #42" in CARD_SUMMARY_SYSTEM_PROMPT
+    assert "PR #1" in CARD_SUMMARY_SYSTEM_PROMPT
     assert "闲置" in CARD_SUMMARY_SYSTEM_PROMPT
     assert "merge" in CARD_SUMMARY_SYSTEM_PROMPT
 

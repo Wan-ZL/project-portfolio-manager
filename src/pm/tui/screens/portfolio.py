@@ -99,6 +99,14 @@ class PortfolioScreen(Screen):
         padding: 0 1;
     }
 
+    #emoji-legend {
+        dock: bottom;
+        height: 1;
+        color: $text-muted;
+        padding: 0 2;
+        background: $surface-darken-2;
+    }
+
     #portfolio-new-task-container {
         dock: bottom;
         height: auto;
@@ -159,6 +167,10 @@ class PortfolioScreen(Screen):
         with Container(id="portfolio-new-task-container"):
             yield Label("[bold cyan]New Task:[/bold cyan] Enter task description for current project")
             yield Input(placeholder="Describe the task...", id="portfolio-new-task-input")
+        yield Static(
+            "\U0001f504 \u6700\u8fd1\u6539\u52a8  \U0001f4cb \u4e0a\u6b21\u6307\u4ee4  \U0001f4a1 AI \u5efa\u8bae",
+            id="emoji-legend",
+        )
         yield StatusBar()
         yield Footer()
 

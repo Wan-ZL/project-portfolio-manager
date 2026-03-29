@@ -1,7 +1,7 @@
 """Portfolio card summary pipeline.
 
-Generates 3 fields per project card:
-1. dynamic -- one-line latest activity (from commits/PRs/issues)
+Generates 3 fields per project card (displayed across 4 lines):
+1. dynamic -- one-line latest activity (commits + PRs combined)
 2. recommendation -- one-line AI suggestion (concrete, actionable)
 3. last_command_summary -- compressed version of user's last command
 
@@ -22,10 +22,12 @@ logger = logging.getLogger(__name__)
 
 CARD_SUMMARY_SYSTEM_PROMPT = """你是一个项目状态助理。用中文+English技术词混合风格。根据项目数据生成3个字段:
 
-1. "dynamic" — 最新动态 (15-30字)
+1. "dynamic" — 最新动态 (15-40字)
+   - 必须同时包含 commit 活动和 PR 活动（如果有的话），不要只说其中一个
    - 基于具体事实 (commit message, PR title, issue title)
-   - 如果最近有 merge: "PR #42 (auth fix) 已 merge, 新增 login validation"
-   - 如果 CI failing: "PR #200 CI failing — test_security 未通过"
+   - 不要只重复 PR 编号 — 要概括 commit/PR 的内容是什么
+   - 如果最近有 merge: "新增 login validation, 修 CSS layout; PR #1 待 review (今天)"
+   - 如果 CI failing: "PR #200 CI failing — test_security 未通过, 最近 commit 修了 auth"
    - 如果没活动: "闲置 12 天, 上次 commit: update README"
    - 绝对不能说 "项目进展顺利" 这种废话
 

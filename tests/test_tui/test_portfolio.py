@@ -97,11 +97,11 @@ async def test_quit_binding():
         # App should be closing or closed
 
 
-# --- 3-line card format tests ---
+# --- 4-line card format tests ---
 
 @pytest.mark.asyncio
-async def test_card_has_three_lines():
-    """Each card should have exactly 3 Static children (line1, line2, line3)."""
+async def test_card_has_four_lines():
+    """Each card should have exactly 4 Static children (line1, line2, line3, line4)."""
     app = make_seeded_app()
     async with app.run_test() as pilot:
         from textual.widgets import Static
@@ -109,7 +109,7 @@ async def test_card_has_three_lines():
         assert len(cards) > 0
         for card in cards:
             statics = list(card.query(Static))
-            assert len(statics) == 3, f"Card {card.project.name} has {len(statics)} lines, expected 3"
+            assert len(statics) == 4, f"Card {card.project.name} has {len(statics)} lines, expected 4"
 
 
 @pytest.mark.asyncio

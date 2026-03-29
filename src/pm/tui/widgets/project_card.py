@@ -24,7 +24,7 @@ def _truncate_at_word(text: str, max_len: int) -> str:
 
 
 class ProjectCard(Widget):
-    """A card widget displaying a project's status in 3 lines."""
+    """A card widget displaying a project's status in 4 lines."""
 
     DEFAULT_CSS = """
     ProjectCard {
@@ -49,10 +49,14 @@ class ProjectCard(Widget):
     ProjectCard .card-line2 {
         width: 100%;
         height: auto;
-        color: $text-muted;
         padding: 0 0 0 2;
     }
     ProjectCard .card-line3 {
+        width: 100%;
+        height: auto;
+        padding: 0 0 0 2;
+    }
+    ProjectCard .card-line4 {
         width: 100%;
         height: auto;
         color: $text-muted;
@@ -92,6 +96,7 @@ class ProjectCard(Widget):
         yield Static(self._render_line1(), classes="card-line1")
         yield Static(self._render_line2(), classes="card-line2")
         yield Static(self._render_line3(), classes="card-line3")
+        yield Static(self._render_line4(), classes="card-line4")
 
     def on_click(self, event: Click) -> None:
         self.post_message(self.Clicked(self))
@@ -122,10 +127,11 @@ class ProjectCard(Widget):
     def _refresh_content(self) -> None:
         try:
             statics = list(self.query(Static))
-            if len(statics) >= 3:
+            if len(statics) >= 4:
                 statics[0].update(self._render_line1())
                 statics[1].update(self._render_line2())
                 statics[2].update(self._render_line3())
+                statics[3].update(self._render_line4())
         except Exception:
             pass
 
@@ -150,31 +156,28 @@ class ProjectCard(Widget):
         return f"{status_dot} [bold]{p.name}[/bold]{pr_badge}{status_indicator}"
 
     def _render_line2(self) -> str:
-        if self._card_data:
-            dynamic = self._card_data.get("dynamic", "Loading...")
-            recommendation = self._card_data.get("recommendation", "")
-            if recommendation:
-                return f"  [dim]{dynamic}[/dim]; [cyan]\U0001f4a1 {recommendation}[/cyan]"
-            return f"  [dim]{dynamic}[/dim]"
-        # Fall back to AI summary one-liner
+        """Line 2: recent activity (commits + PRs) -- bright/normal color."""
+        if self._card_data and self._card_data.get("dynamic"):
+            return f"  \U0001f504 {self._card_data['dynamic']}"
         if self._ai_summary and self._ai_summary.get("one_line_status"):
             one_line = self._ai_summary["one_line_status"]
             one_line = _truncate_at_word(one_line, 120)
-            return f"  [dim italic]{one_line}[/dim italic]"
+            return f"  \U0001f504 {one_line}"
         if self.project.summary:
             summary = _truncate_at_word(self.project.summary, 120)
-            return f"  [dim italic]{summary}[/dim italic]"
-        return "  [dim]Loading...[/dim]"
+            return f"  \U0001f504 {summary}"
+        return "  [dim italic]Generating AI summary...[/dim italic]"
 
     def _render_line3(self) -> str:
+        """Line 3: last user command -- bright/normal color."""
         if self._card_data and self._card_data.get("last_command_summary"):
             summary = self._card_data["last_command_summary"]
-            status_icon = {
-                "running": "\U0001f504",
-                "completed": "\u2705",
-                "failed": "\u274c",
-                "paused": "\u23f8",
-            }.get(self._last_command_status, "\U0001f4cb")
             time_str = f" ({self._last_command_time})" if self._last_command_time else ""
-            return f'  {status_icon} 上次: "{summary}"{time_str}'
+            return f'  \U0001f4cb 上次: "{summary}"{time_str}'
         return "  [dim]\U0001f4cb 还没有执行过任务[/dim]"
+
+    def _render_line4(self) -> str:
+        """Line 4: AI recommendation -- dim/gray color."""
+        if self._card_data and self._card_data.get("recommendation"):
+            return f"  [dim]\U0001f4a1 {self._card_data['recommendation']}[/dim]"
+        return ""
