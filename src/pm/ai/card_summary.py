@@ -48,7 +48,7 @@ CARD_SUMMARY_SYSTEM_PROMPT = """你是一个项目状态助理。用中文+Engli
 # API key file path (with invisible character in filename, matching user's actual path)
 API_KEY_FILE = Path("/Users/zelin/Downloads/API Key/\u200eanthropic-api-key.txt")
 
-MODEL = "claude-sonnet-4-5-20250514"
+MODEL = "claude-sonnet-4-20250514"
 
 
 def _load_api_key() -> str:
