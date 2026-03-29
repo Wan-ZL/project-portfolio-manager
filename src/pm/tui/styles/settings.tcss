@@ -58,7 +58,8 @@ AccountItem:hover {
 }
 
 .account-header {
-    height: 1;
+    height: auto;
+    min-height: 1;
 }
 
 .account-buttons {

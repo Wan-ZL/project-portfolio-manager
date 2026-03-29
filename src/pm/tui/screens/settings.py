@@ -174,6 +174,8 @@ class ProjectGroupItem(Static):
 class SettingsScreen(Screen):
     """Settings screen for managing GitHub accounts and app configuration."""
 
+    CSS_PATH = "../styles/settings.tcss"
+
     BINDINGS = [
         Binding("escape", "go_back", "Back"),
     ]
