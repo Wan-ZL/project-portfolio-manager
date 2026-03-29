@@ -111,9 +111,70 @@ class TestFetchLiveProjectsAndPrs:
         with patch.object(httpx_mod, "get", return_value=mock_resp):
             projects, prs = _fetch_live_projects_and_prs()
 
+        # Each selected repo becomes its own card, named by repo name (not owner)
         assert len(projects) == 1
-        assert projects[0].name == "user"
+        assert projects[0].name == "repo1"
         assert "user/repo1" in projects[0].repos
+
+    @patch("pm.auth.credentials.load_project_groups")
+    @patch("pm.config.loader.load_config")
+    @patch("pm.auth.credentials.load_credentials")
+    def test_auto_discovers_multiple_repos_as_separate_cards(self, mock_creds, mock_cfg, mock_groups):
+        mock_creds.return_value = {
+            "accounts": {
+                "account-1": {
+                    "token": "ghp_test",
+                    "username": "user",
+                    "selected_repos": ["user/repo1", "user/repo2", "org/repo3"],
+                },
+            }
+        }
+        mock_groups.return_value = {}
+        from pm.config.models import PMConfig
+        mock_cfg.return_value = PMConfig()
+
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.json.return_value = []
+
+        import httpx as httpx_mod
+        with patch.object(httpx_mod, "get", return_value=mock_resp):
+            projects, prs = _fetch_live_projects_and_prs()
+
+        assert len(projects) == 3
+        names = {p.name for p in projects}
+        assert names == {"repo1", "repo2", "repo3"}
+
+    @patch("pm.auth.credentials.load_project_groups")
+    @patch("pm.config.loader.load_config")
+    @patch("pm.auth.credentials.load_credentials")
+    def test_project_groups_create_grouped_cards(self, mock_creds, mock_cfg, mock_groups):
+        mock_creds.return_value = {
+            "accounts": {
+                "account-1": {
+                    "token": "ghp_test",
+                    "username": "user",
+                    "selected_repos": ["user/repo1", "user/repo2"],
+                },
+            }
+        }
+        mock_groups.return_value = {
+            "My Group": ["user/repo1", "user/repo2"],
+        }
+        from pm.config.models import PMConfig
+        mock_cfg.return_value = PMConfig()
+
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.json.return_value = []
+
+        import httpx as httpx_mod
+        with patch.object(httpx_mod, "get", return_value=mock_resp):
+            projects, prs = _fetch_live_projects_and_prs()
+
+        assert len(projects) == 1
+        assert projects[0].name == "My Group"
+        assert projects[0].repos == ["user/repo1", "user/repo2"]
 
 
 class TestTUILiveMode:

@@ -91,6 +91,15 @@ def get_display_name(account: str, path: Path | None = None) -> str:
         return name
     # Generate default based on account id number
     num = account.replace("account-", "")
+    # If num is not a pure number (e.g. "personal"), find the account's position
+    if not num.isdigit():
+        accounts = creds.get("accounts", {})
+        idx = 1
+        for acct_id in accounts:
+            if acct_id == account:
+                return f"GitHub {idx}"
+            idx += 1
+        return "GitHub 1"
     return f"GitHub {num}"
 
 
@@ -98,9 +107,15 @@ def list_accounts(path: Path | None = None) -> list[dict]:
     creds = load_credentials(path)
     accounts = creds.get("accounts", {})
     result = []
+    idx = 1
     for name, data in accounts.items():
-        num = name.replace("account-", "")
-        display = data.get("display_name", "") or f"GitHub {num}"
+        display = data.get("display_name", "")
+        if not display:
+            num = name.replace("account-", "")
+            if num.isdigit():
+                display = f"GitHub {num}"
+            else:
+                display = f"GitHub {idx}"
         result.append({
             "id": name,
             "username": data.get("username", "unknown"),
@@ -108,6 +123,7 @@ def list_accounts(path: Path | None = None) -> list[dict]:
             "selected_repos": data.get("selected_repos", []),
             "display_name": display,
         })
+        idx += 1
     return result
 
 

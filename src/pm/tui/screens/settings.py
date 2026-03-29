@@ -15,6 +15,7 @@ class AccountItem(Static):
     DEFAULT_CSS = """
     AccountItem {
         height: auto;
+        min-height: 5;
         padding: 1 2;
         margin: 0 1 1 1;
         background: $surface-darken-1;
@@ -24,11 +25,12 @@ class AccountItem(Static):
         background: $surface-lighten-1;
     }
     .account-header {
-        height: 1;
+        height: auto;
+        min-height: 1;
     }
     .account-buttons {
         height: 3;
-        padding: 1 0 0 2;
+        margin: 1 0 0 2;
     }
     .account-buttons Button {
         margin: 0 1 0 0;

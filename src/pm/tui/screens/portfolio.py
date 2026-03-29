@@ -421,49 +421,95 @@ def _fetch_live_projects_and_prs() -> tuple[list[ProjectInfo], dict[str, list[En
                     assets=list(proj_cfg.assets),
                 ))
     else:
-        # No real config: use selected_repos grouped by owner
-        for account_name, account_data in accounts.items():
-            token = account_data.get("token", "")
-            if not token:
-                continue
+        # No real config: check for project groups first, then show per-repo
+        from pm.auth.credentials import load_project_groups
+        project_groups = load_project_groups()
 
-            selected = _get_selected_repos_for_account(account_name)
-            if not selected:
-                # No repos selected for this account
-                continue
+        if project_groups:
+            # Use project groups: one card per group
+            for group_name, group_repos in project_groups.items():
+                if not group_repos:
+                    continue
+                # Find tokens for the repos in this group
+                group_prs: list[EnhancedPR] = []
+                for account_name, account_data in accounts.items():
+                    token = account_data.get("token", "")
+                    if not token:
+                        continue
+                    selected = _get_selected_repos_for_account(account_name)
+                    repos_in_group = [r for r in group_repos if r in selected]
+                    if not repos_in_group:
+                        continue
+                    import httpx
+                    headers = {
+                        "Authorization": f"token {token}",
+                        "Accept": "application/json",
+                    }
+                    group_prs.extend(_fetch_prs_for_repos(repos_in_group, headers))
 
-            import httpx
-            headers = {
-                "Authorization": f"token {token}",
-                "Accept": "application/json",
-            }
-
-            # Group selected repos by owner
-            grouped: dict[str, list[str]] = {}
-            for repo_full_name in selected:
-                owner = repo_full_name.split("/")[0] if "/" in repo_full_name else "unknown"
-                grouped.setdefault(owner, []).append(repo_full_name)
-
-            for owner, owner_repos in grouped.items():
-                proj_prs = _fetch_prs_for_repos(owner_repos, headers)
-                pr_count = len(proj_prs)
-
+                pr_count = len(group_prs)
                 status = "green"
                 if pr_count == 0:
                     status = "gray"
                 elif pr_count > 5:
                     status = "yellow"
 
-                all_prs[owner] = proj_prs
+                all_prs[group_name] = group_prs
+                # Use the first account that has repos in this group
+                group_account = ""
+                for account_name, account_data in accounts.items():
+                    selected = _get_selected_repos_for_account(account_name)
+                    if any(r in selected for r in group_repos):
+                        group_account = account_name
+                        break
+
                 projects.append(ProjectInfo(
-                    name=owner,
-                    account=account_name,
-                    repos=owner_repos,
+                    name=group_name,
+                    account=group_account,
+                    repos=group_repos,
                     open_prs=pr_count,
                     active_sessions=0,
                     status=status,
-                    summary=f"{pr_count} open PRs across {len(owner_repos)} repos",
+                    summary=f"{pr_count} open PRs across {len(group_repos)} repos",
                 ))
+        else:
+            # No project groups: each selected repo becomes its own card
+            for account_name, account_data in accounts.items():
+                token = account_data.get("token", "")
+                if not token:
+                    continue
+
+                selected = _get_selected_repos_for_account(account_name)
+                if not selected:
+                    continue
+
+                import httpx
+                headers = {
+                    "Authorization": f"token {token}",
+                    "Accept": "application/json",
+                }
+
+                for repo_full_name in selected:
+                    repo_name = repo_full_name.split("/")[1] if "/" in repo_full_name else repo_full_name
+                    proj_prs = _fetch_prs_for_repos([repo_full_name], headers)
+                    pr_count = len(proj_prs)
+
+                    status = "green"
+                    if pr_count == 0:
+                        status = "gray"
+                    elif pr_count > 5:
+                        status = "yellow"
+
+                    all_prs[repo_name] = proj_prs
+                    projects.append(ProjectInfo(
+                        name=repo_name,
+                        account=account_name,
+                        repos=[repo_full_name],
+                        open_prs=pr_count,
+                        active_sessions=0,
+                        status=status,
+                        summary=f"{pr_count} open PRs",
+                    ))
 
     return projects, all_prs
 
