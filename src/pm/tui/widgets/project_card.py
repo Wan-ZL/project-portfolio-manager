@@ -11,6 +11,18 @@ from pm.github.pr import EnhancedPR
 from pm.tui.widgets.project_list import ProjectInfo
 
 
+def _truncate_at_word(text: str, max_len: int) -> str:
+    """Truncate text at a word boundary, adding '...' if truncated."""
+    if len(text) <= max_len:
+        return text
+    truncated = text[: max_len - 3]
+    # Find the last space to break at word boundary
+    last_space = truncated.rfind(" ")
+    if last_space > max_len // 2:
+        truncated = truncated[:last_space]
+    return truncated.rstrip() + "..."
+
+
 class ProjectCard(Widget):
     """A card widget displaying a project's status, summary, and top PRs."""
 
@@ -65,11 +77,18 @@ class ProjectCard(Widget):
             super().__init__()
             self.card = card
 
-    def __init__(self, project: ProjectInfo, prs: list[EnhancedPR] | None = None, **kwargs):
+    def __init__(
+        self,
+        project: ProjectInfo,
+        prs: list[EnhancedPR] | None = None,
+        ai_summary: dict | None = None,
+        **kwargs,
+    ):
         super().__init__(**kwargs)
         self.project = project
         self._prs: list[EnhancedPR] = prs or []
         self._activity: str = ""
+        self._ai_summary: dict | None = ai_summary
 
     def compose(self) -> ComposeResult:
         yield Static(self._render_header(), classes="card-header")
@@ -122,13 +141,19 @@ class ProjectCard(Widget):
 
         return f"{status_dot} [bold]{p.name}[/bold]{pr_badge}{status_label}"
 
+    def set_ai_summary(self, summary: dict) -> None:
+        self._ai_summary = summary
+        self._refresh_content()
+
     def _render_summary(self) -> str:
+        # Prefer AI one-line summary if available
+        if self._ai_summary and self._ai_summary.get("one_line_status"):
+            one_line = self._ai_summary["one_line_status"]
+            one_line = _truncate_at_word(one_line, 120)
+            return f"[dim italic]{one_line}[/dim italic]"
         if not self.project.summary:
             return ""
-        # Truncate to one line for card view
-        summary = self.project.summary
-        if len(summary) > 120:
-            summary = summary[:117] + "..."
+        summary = _truncate_at_word(self.project.summary, 120)
         return f"[dim italic]{summary}[/dim italic]"
 
     def _render_prs(self) -> str:
@@ -146,14 +171,16 @@ class ProjectCard(Widget):
 
             review_label = {
                 "approved": "[green]approved[/green]",
-                "changes_requested": "[yellow]changes_requested[/yellow]",
+                "changes_requested": "[yellow]changes[/yellow]",
                 "pending": "[dim]pending[/dim]",
             }.get(pr.review_status, f"[dim]{pr.review_status}[/dim]")
 
+            title = _truncate_at_word(pr.title, 40)
+
             connector = "\u2514" if i == len(show_prs) - 1 else "\u251c"
             lines.append(
-                f"  {connector} PR [bold]#{pr.number}[/bold]  {pr.title[:40]:<40}  "
-                f"CI:{ci_icon}  Review:{review_label}"
+                f"  {connector} PR [bold]#{pr.number}[/bold]  {title:<40}  "
+                f"CI: {ci_icon}  [dim]|[/dim]  Review: {review_label}"
             )
 
         if len(self._prs) > 5:
@@ -162,6 +189,23 @@ class ProjectCard(Widget):
         return "\n".join(lines)
 
     def _render_activity(self) -> str:
-        if not self._activity:
-            return ""
-        return self._activity
+        if self._activity:
+            return self._activity
+        # Generate activity from PRs if available
+        if self._prs:
+            latest = max(self._prs, key=lambda p: p.updated_at)
+            from datetime import datetime
+            now = datetime.now()
+            try:
+                delta = now - latest.updated_at.replace(tzinfo=None)
+            except TypeError:
+                delta = now - latest.updated_at
+            if delta.days > 0:
+                ago = f"{delta.days}d ago"
+            elif delta.seconds >= 3600:
+                ago = f"{delta.seconds // 3600}h ago"
+            else:
+                ago = "just now"
+            title = _truncate_at_word(latest.title, 50)
+            return f"[dim]Recent: PR #{latest.number} {title} ({ago})[/dim]"
+        return ""

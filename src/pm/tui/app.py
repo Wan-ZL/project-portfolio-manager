@@ -13,11 +13,17 @@ from pm.tui.screens.task import TaskScreen
 class PMApp(App):
     """Project Portfolio Manager TUI"""
 
-    TITLE = "PPM - Portfolio Manager"
+    TITLE = "PPM"
 
     BINDINGS = [
         Binding("comma", "open_settings", "Settings", show=False),
+        Binding("ctrl+p", "noop", "", show=False),
     ]
+
+    COMMAND_PALETTE_BINDING = "ctrl+shift+p"
+
+    def action_noop(self) -> None:
+        pass
 
     def __init__(self, demo: bool = False, **kwargs):
         super().__init__(**kwargs)

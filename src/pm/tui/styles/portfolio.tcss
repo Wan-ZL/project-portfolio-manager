@@ -1,4 +1,4 @@
-/* Portfolio view — card-based layout */
+/* Portfolio view -- card-based layout */
 
 PortfolioScreen {
     layout: vertical;
@@ -17,6 +17,7 @@ PortfolioScreen {
 
 #cards-scroll {
     height: 1fr;
+    min-height: 100%;
     padding: 1 2;
 }
 

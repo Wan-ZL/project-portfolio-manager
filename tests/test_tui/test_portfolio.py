@@ -62,7 +62,7 @@ async def test_keyboard_navigation_up():
 
 @pytest.mark.asyncio
 async def test_keyboard_navigation_bounds():
-    app = PMApp()
+    app = PMApp(demo=True)
     async with app.run_test() as pilot:
         screen = app.screen
         assert isinstance(screen, PortfolioScreen)

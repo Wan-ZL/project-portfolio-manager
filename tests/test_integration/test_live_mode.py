@@ -92,31 +92,24 @@ class TestFetchLiveProjectsAndPrs:
     @patch("pm.auth.credentials.load_credentials")
     def test_auto_discovers_without_config(self, mock_creds, mock_cfg):
         mock_creds.return_value = {
-            "accounts": {"personal": {"token": "ghp_test", "username": "user"}}
+            "accounts": {
+                "personal": {
+                    "token": "ghp_test",
+                    "username": "user",
+                    "selected_repos": ["user/repo1"],
+                },
+            }
         }
         from pm.config.models import PMConfig
         mock_cfg.return_value = PMConfig()
-
-        mock_discover_result = [
-            {
-                "name": "repo1",
-                "full_name": "user/repo1",
-                "owner": "user",
-                "description": "",
-                "default_branch": "main",
-                "private": False,
-                "html_url": "",
-            },
-        ]
 
         mock_resp = MagicMock()
         mock_resp.status_code = 200
         mock_resp.json.return_value = []
 
         import httpx as httpx_mod
-        with patch("pm.auth.github_oauth.discover_repos", return_value=mock_discover_result):
-            with patch.object(httpx_mod, "get", return_value=mock_resp):
-                projects, prs = _fetch_live_projects_and_prs()
+        with patch.object(httpx_mod, "get", return_value=mock_resp):
+            projects, prs = _fetch_live_projects_and_prs()
 
         assert len(projects) == 1
         assert projects[0].name == "user"

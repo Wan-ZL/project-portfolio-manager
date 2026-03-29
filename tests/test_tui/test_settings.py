@@ -11,19 +11,24 @@ import yaml
 
 from pm.tui.app import PMApp
 from pm.tui.screens.portfolio import PortfolioScreen
-from pm.tui.screens.settings import SettingsScreen, AccountItem
+from pm.tui.screens.settings import SettingsScreen, AccountItem, ProjectGroupItem
 from pm.tui.screens.repo_selector import RepoSelectorScreen, RepoItem
 from pm.auth.credentials import (
+    add_project_group,
     get_display_name,
     list_accounts,
     load_credentials,
+    load_project_groups,
     next_account_id,
     remove_account,
+    remove_project_group,
     rename_account,
     save_account,
     save_credentials,
+    save_project_groups,
     save_selected_repos,
     get_selected_repos,
+    update_project_group,
 )
 from pm.config.settings import (
     load_settings,
@@ -175,6 +180,59 @@ class TestSelectedRepos:
         assert name == "Work"
 
 
+# ────────────────────── Project Groups ──────────────────────
+
+
+class TestProjectGroups:
+    def test_empty_by_default(self, cred_file):
+        result = load_project_groups(cred_file)
+        assert result == {}
+
+    def test_add_group(self, cred_file):
+        add_project_group("Web App", ["alice/repo1", "alice/repo2"], cred_file)
+        groups = load_project_groups(cred_file)
+        assert "Web App" in groups
+        assert groups["Web App"] == ["alice/repo1", "alice/repo2"]
+
+    def test_remove_group(self, cred_file):
+        add_project_group("Web App", ["alice/repo1"], cred_file)
+        remove_project_group("Web App", cred_file)
+        groups = load_project_groups(cred_file)
+        assert "Web App" not in groups
+
+    def test_update_group(self, cred_file):
+        add_project_group("Web App", ["alice/repo1"], cred_file)
+        update_project_group("Web App", ["alice/repo1", "bob/repo2"], cred_file)
+        groups = load_project_groups(cred_file)
+        assert groups["Web App"] == ["alice/repo1", "bob/repo2"]
+
+    def test_multiple_groups(self, cred_file):
+        add_project_group("Project A", ["a/r1"], cred_file)
+        add_project_group("Project B", ["b/r2"], cred_file)
+        groups = load_project_groups(cred_file)
+        assert len(groups) == 2
+        assert "Project A" in groups
+        assert "Project B" in groups
+
+    def test_remove_nonexistent_group(self, cred_file):
+        remove_project_group("nonexistent", cred_file)
+        groups = load_project_groups(cred_file)
+        assert groups == {}
+
+    def test_groups_preserve_accounts(self, cred_file):
+        save_account("account-1", "ghp_a", "alice", cred_file)
+        add_project_group("Web App", ["alice/repo1"], cred_file)
+        result = list_accounts(cred_file)
+        assert len(result) == 1
+        assert result[0]["username"] == "alice"
+
+    def test_save_and_load_groups(self, cred_file):
+        groups = {"G1": ["a/r1", "a/r2"], "G2": ["b/r3"]}
+        save_project_groups(groups, cred_file)
+        loaded = load_project_groups(cred_file)
+        assert loaded == groups
+
+
 # ────────────────────── Settings YAML ──────────────────────
 
 
@@ -281,13 +339,13 @@ async def test_settings_screen_escape_goes_back():
 
 
 @pytest.mark.asyncio
-async def test_settings_screen_has_three_sections():
+async def test_settings_screen_has_four_sections():
     app = PMApp()
     async with app.run_test() as pilot:
         app.push_screen(SettingsScreen())
         await pilot.pause()
         headers = app.query(".settings-section-header")
-        assert len(headers) == 3
+        assert len(headers) == 4
 
 
 @pytest.mark.asyncio

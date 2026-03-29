@@ -257,6 +257,26 @@ def _has_credentials() -> bool:
         return False
 
 
+def _has_selected_repos_or_config() -> bool:
+    """Check if user has selected repos or a real config with projects."""
+    try:
+        from pm.config.loader import load_config, has_real_projects
+        cfg = load_config()
+        if has_real_projects(cfg):
+            return True
+    except Exception:
+        pass
+    try:
+        from pm.auth.credentials import load_credentials
+        creds = load_credentials()
+        for acct_data in creds.get("accounts", {}).values():
+            if acct_data.get("selected_repos"):
+                return True
+    except Exception:
+        pass
+    return False
+
+
 def _get_credential_token(account: str = "personal") -> str | None:
     """Get token from credentials.yaml."""
     try:
@@ -289,21 +309,64 @@ def _get_account_display_names() -> dict[str, str]:
         return {}
 
 
+def _get_selected_repos_for_account(account_name: str) -> list[str]:
+    """Get selected repos for an account from credentials.yaml."""
+    try:
+        from pm.auth.credentials import get_selected_repos
+        return get_selected_repos(account_name)
+    except Exception:
+        return []
+
+
+def _fetch_prs_for_repos(
+    repo_names: list[str], headers: dict
+) -> list[EnhancedPR]:
+    """Fetch open PRs for a list of repos."""
+    import httpx
+    prs: list[EnhancedPR] = []
+    for repo_name in repo_names:
+        try:
+            resp = httpx.get(
+                f"https://api.github.com/repos/{repo_name}/pulls",
+                headers=headers,
+                params={"state": "open", "per_page": 100},
+                timeout=15,
+            )
+            if resp.status_code == 200:
+                for pr_data in resp.json():
+                    prs.append(EnhancedPR(
+                        repo_id=repo_name,
+                        number=pr_data.get("number", 0),
+                        title=pr_data.get("title", ""),
+                        state="open",
+                        author=pr_data.get("user", {}).get("login", ""),
+                        created_at=datetime.fromisoformat(
+                            pr_data["created_at"].replace("Z", "+00:00")
+                        ) if pr_data.get("created_at") else datetime.now(),
+                        updated_at=datetime.fromisoformat(
+                            pr_data["updated_at"].replace("Z", "+00:00")
+                        ) if pr_data.get("updated_at") else datetime.now(),
+                        url=pr_data.get("html_url", ""),
+                    ))
+        except Exception:
+            pass
+    return prs
+
+
 def _fetch_live_projects_and_prs() -> tuple[list[ProjectInfo], dict[str, list[EnhancedPR]]]:
     """Fetch real projects and PRs from GitHub using stored credentials.
 
     Returns (projects, {project_name: [prs]}).
-    Works with or without a config file. Without config, auto-discovers repos.
+    Respects selected_repos from credentials.yaml.
+    Works with or without a config file. Without config, groups by owner.
     """
     from pm.auth.credentials import load_credentials
-    from pm.auth.github_oauth import discover_repos
 
     creds = load_credentials()
     accounts = creds.get("accounts", {})
     if not accounts:
         return [], {}
 
-    # Try loading config first
     from pm.config.loader import load_config, has_real_projects
     cfg = load_config()
 
@@ -311,12 +374,13 @@ def _fetch_live_projects_and_prs() -> tuple[list[ProjectInfo], dict[str, list[En
     all_prs: dict[str, list[EnhancedPR]] = {}
 
     if has_real_projects(cfg):
-        # Use config-based projects
+        # Use config-based projects, filtered by selected_repos
         for account_name in accounts:
             token = accounts[account_name].get("token", "")
             if not token:
                 continue
 
+            selected = _get_selected_repos_for_account(account_name)
             import httpx
             headers = {
                 "Authorization": f"token {token}",
@@ -326,36 +390,17 @@ def _fetch_live_projects_and_prs() -> tuple[list[ProjectInfo], dict[str, list[En
             for proj_name, proj_cfg in cfg.projects.items():
                 if proj_cfg.account != account_name:
                     continue
-                proj_prs: list[EnhancedPR] = []
-                for repo_name in proj_cfg.repos:
-                    try:
-                        resp = httpx.get(
-                            f"https://api.github.com/repos/{repo_name}/pulls",
-                            headers=headers,
-                            params={"state": "open", "per_page": 100},
-                            timeout=15,
-                        )
-                        if resp.status_code == 200:
-                            for pr_data in resp.json():
-                                proj_prs.append(EnhancedPR(
-                                    repo_id=repo_name,
-                                    number=pr_data.get("number", 0),
-                                    title=pr_data.get("title", ""),
-                                    state="open",
-                                    author=pr_data.get("user", {}).get("login", ""),
-                                    created_at=datetime.fromisoformat(
-                                        pr_data["created_at"].replace("Z", "+00:00")
-                                    ) if pr_data.get("created_at") else datetime.now(),
-                                    updated_at=datetime.fromisoformat(
-                                        pr_data["updated_at"].replace("Z", "+00:00")
-                                    ) if pr_data.get("updated_at") else datetime.now(),
-                                    url=pr_data.get("html_url", ""),
-                                ))
-                    except Exception:
-                        pass
+                # Filter repos to only selected ones (if selections exist)
+                if selected:
+                    repos_to_fetch = [r for r in proj_cfg.repos if r in selected]
+                else:
+                    repos_to_fetch = list(proj_cfg.repos)
 
+                if not repos_to_fetch:
+                    continue
+
+                proj_prs = _fetch_prs_for_repos(repos_to_fetch, headers)
                 pr_count = len(proj_prs)
-                has_failing = False  # Would need checks API for real status
 
                 status = "green"
                 if pr_count == 0:
@@ -367,7 +412,7 @@ def _fetch_live_projects_and_prs() -> tuple[list[ProjectInfo], dict[str, list[En
                 projects.append(ProjectInfo(
                     name=proj_name,
                     account=proj_cfg.account,
-                    repos=list(proj_cfg.repos),
+                    repos=repos_to_fetch,
                     open_prs=pr_count,
                     active_sessions=0,
                     status=status,
@@ -376,75 +421,48 @@ def _fetch_live_projects_and_prs() -> tuple[list[ProjectInfo], dict[str, list[En
                     assets=list(proj_cfg.assets),
                 ))
     else:
-        # No real config: auto-discover repos from GitHub
+        # No real config: use selected_repos grouped by owner
         for account_name, account_data in accounts.items():
             token = account_data.get("token", "")
             if not token:
                 continue
 
-            repos = discover_repos(token)
-            if not repos:
+            selected = _get_selected_repos_for_account(account_name)
+            if not selected:
+                # No repos selected for this account
                 continue
 
-            username = account_data.get("username", "")
             import httpx
             headers = {
                 "Authorization": f"token {token}",
                 "Accept": "application/json",
             }
 
-            # Group repos by owner
-            grouped: dict[str, list[dict]] = {}
-            for repo in repos:
-                owner = repo.get("owner", "unknown")
-                grouped.setdefault(owner, []).append(repo)
+            # Group selected repos by owner
+            grouped: dict[str, list[str]] = {}
+            for repo_full_name in selected:
+                owner = repo_full_name.split("/")[0] if "/" in repo_full_name else "unknown"
+                grouped.setdefault(owner, []).append(repo_full_name)
 
             for owner, owner_repos in grouped.items():
-                proj_prs: list[EnhancedPR] = []
-                repo_names = []
-                for repo in owner_repos:
-                    full_name = repo["full_name"]
-                    repo_names.append(full_name)
-                    try:
-                        resp = httpx.get(
-                            f"https://api.github.com/repos/{full_name}/pulls",
-                            headers=headers,
-                            params={"state": "open", "per_page": 100},
-                            timeout=15,
-                        )
-                        if resp.status_code == 200:
-                            for pr_data in resp.json():
-                                proj_prs.append(EnhancedPR(
-                                    repo_id=full_name,
-                                    number=pr_data.get("number", 0),
-                                    title=pr_data.get("title", ""),
-                                    state="open",
-                                    author=pr_data.get("user", {}).get("login", ""),
-                                    created_at=datetime.fromisoformat(
-                                        pr_data["created_at"].replace("Z", "+00:00")
-                                    ) if pr_data.get("created_at") else datetime.now(),
-                                    updated_at=datetime.fromisoformat(
-                                        pr_data["updated_at"].replace("Z", "+00:00")
-                                    ) if pr_data.get("updated_at") else datetime.now(),
-                                    url=pr_data.get("html_url", ""),
-                                ))
-                    except Exception:
-                        pass
-
+                proj_prs = _fetch_prs_for_repos(owner_repos, headers)
                 pr_count = len(proj_prs)
-                status = "green" if pr_count == 0 else ("yellow" if pr_count > 5 else "green")
+
+                status = "green"
                 if pr_count == 0:
                     status = "gray"
+                elif pr_count > 5:
+                    status = "yellow"
 
                 all_prs[owner] = proj_prs
                 projects.append(ProjectInfo(
                     name=owner,
                     account=account_name,
-                    repos=repo_names,
+                    repos=owner_repos,
                     open_prs=pr_count,
                     active_sessions=0,
                     status=status,
-                    summary=f"{pr_count} open PRs across {len(repo_names)} repos",
+                    summary=f"{pr_count} open PRs across {len(owner_repos)} repos",
                 ))
 
     return projects, all_prs
@@ -555,17 +573,21 @@ class PortfolioScreen(Screen):
         Binding("r", "refresh", "Refresh"),
         Binding("question_mark", "help", "Help"),
         Binding("d", "toggle_demo", "Demo", show=False),
+        Binding("ctrl+p", "noop", "", show=False),
     ]
+
+    def action_noop(self) -> None:
+        pass
 
     def compose(self) -> ComposeResult:
         yield Static(
-            "[bold]Portfolio Manager[/bold]  [dim]\u2502  Your projects at a glance[/dim]",
+            "[bold]PPM[/bold]  [dim]\u2502  Your projects at a glance[/dim]",
             id="portfolio-title",
         )
         yield Container(
             Static(
                 "\n\n"
-                "[bold cyan]Welcome to PPM! \U0001f44b[/bold cyan]\n\n"
+                "[bold cyan]Welcome to PPM![/bold cyan]\n\n"
                 "No GitHub accounts connected yet.\n\n"
                 "Press [bold][s][/bold] to open Settings\n"
                 "and connect your GitHub account.\n\n"
@@ -590,10 +612,15 @@ class PortfolioScreen(Screen):
             self._ai_summaries = dict(DEMO_SUMMARIES)
             self._ai_suggestions = list(DEMO_SUGGESTIONS)
         elif _has_credentials():
+            # Check if any repos are selected or config has real projects
+            has_selections = _has_selected_repos_or_config()
             self._show_cards_view()
-            projects = _get_projects(self)
-            self._set_projects(projects)
-            self._start_live_loading()
+            if has_selections:
+                projects = _get_projects(self)
+                self._set_projects(projects)
+                self._start_live_loading()
+            else:
+                self._show_no_repos_state()
         else:
             self._show_empty_state()
 
@@ -625,6 +652,20 @@ class PortfolioScreen(Screen):
         scroll = self.query_one("#cards-scroll")
         scroll.add_class("hidden")
 
+    def _show_no_repos_state(self) -> None:
+        """Show message when credentials exist but no repos are selected."""
+        empty_text = self.query_one("#empty-state-text", Static)
+        empty_text.update(
+            "\n\n"
+            "[bold cyan]No repos selected[/bold cyan]\n\n"
+            "Press [bold][s][/bold] to open Settings and choose repos.\n\n"
+            "Press [bold][d][/bold] to view demo data.\n"
+        )
+        empty = self.query_one("#empty-state-container")
+        empty.add_class("visible")
+        scroll = self.query_one("#cards-scroll")
+        scroll.add_class("hidden")
+
     def _show_cards_view(self) -> None:
         empty = self.query_one("#empty-state-container")
         empty.remove_class("visible")
@@ -638,18 +679,50 @@ class PortfolioScreen(Screen):
         scroll.remove_children()
         self._cards = []
 
+        # Get display names for accounts
+        display_names = _get_account_display_names()
+        # Also map usernames to display names for fallback
+        username_map: dict[str, str] = {}
+        try:
+            from pm.auth.credentials import load_credentials
+            creds = load_credentials()
+            for acct_id, data in creds.get("accounts", {}).items():
+                uname = data.get("username", "")
+                if uname:
+                    username_map[uname] = display_names.get(acct_id, uname)
+        except Exception:
+            pass
+
         # Group by account
         grouped: dict[str, list[ProjectInfo]] = {}
         for p in projects:
             grouped.setdefault(p.account, []).append(p)
 
         for account, account_projects in grouped.items():
-            scroll.mount(
-                Static(f"[bold cyan]\u25bc {account}[/bold cyan]", classes="account-header")
-            )
+            # Resolve display name: check direct match, then username map
+            display = display_names.get(account, "")
+            if not display:
+                display = username_map.get(account, "")
+            if not display:
+                display = account
+            # Try to get username for the parenthetical
+            username = ""
+            try:
+                from pm.auth.credentials import load_credentials
+                creds = load_credentials()
+                acct_data = creds.get("accounts", {}).get(account, {})
+                username = acct_data.get("username", "")
+            except Exception:
+                pass
+            if username and username != display:
+                header_text = f"[bold cyan]\u25bc {display} ({username})[/bold cyan]"
+            else:
+                header_text = f"[bold cyan]\u25bc {display}[/bold cyan]"
+            scroll.mount(Static(header_text, classes="account-header"))
             for proj in account_projects:
                 prs = _get_prs(self, proj.name)
-                card = ProjectCard(proj, prs=prs)
+                ai_summary = _get_ai_summary(self, proj.name)
+                card = ProjectCard(proj, prs=prs, ai_summary=ai_summary)
                 scroll.mount(card)
                 self._cards.append(card)
 
@@ -818,9 +891,13 @@ class PortfolioScreen(Screen):
 
     def _on_settings_closed(self, result=None) -> None:
         if _has_credentials():
-            self._show_cards_view()
-            self._live_prs.clear()
-            self._start_live_loading()
+            has_selections = _has_selected_repos_or_config()
+            if has_selections:
+                self._show_cards_view()
+                self._live_prs.clear()
+                self._start_live_loading()
+            else:
+                self._show_no_repos_state()
         else:
             self._show_empty_state()
 

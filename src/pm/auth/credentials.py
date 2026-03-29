@@ -118,3 +118,44 @@ def next_account_id(path: Path | None = None) -> str:
     while f"account-{idx}" in accounts:
         idx += 1
     return f"account-{idx}"
+
+
+def load_project_groups(path: Path | None = None) -> dict[str, list[str]]:
+    creds = load_credentials(path)
+    groups = creds.get("project_groups", {})
+    result = {}
+    for name, data in groups.items():
+        if isinstance(data, dict):
+            result[name] = data.get("repos", [])
+        elif isinstance(data, list):
+            result[name] = data
+        else:
+            result[name] = []
+    return result
+
+
+def save_project_groups(groups: dict[str, list[str]], path: Path | None = None) -> None:
+    creds = load_credentials(path)
+    creds["project_groups"] = {
+        name: {"repos": repos} for name, repos in groups.items()
+    }
+    save_credentials(creds, path)
+
+
+def add_project_group(name: str, repos: list[str], path: Path | None = None) -> None:
+    groups = load_project_groups(path)
+    groups[name] = repos
+    save_project_groups(groups, path)
+
+
+def remove_project_group(name: str, path: Path | None = None) -> None:
+    groups = load_project_groups(path)
+    if name in groups:
+        del groups[name]
+        save_project_groups(groups, path)
+
+
+def update_project_group(name: str, repos: list[str], path: Path | None = None) -> None:
+    groups = load_project_groups(path)
+    groups[name] = repos
+    save_project_groups(groups, path)
