@@ -464,13 +464,15 @@ class ProjectScreen(Screen):
     class GoBack(Message):
         pass
 
-    def __init__(self, project: ProjectInfo, prs: list[EnhancedPR] | None = None,
+    def __init__(self, project_name: str = "", project: ProjectInfo | None = None,
+                 prs: list[EnhancedPR] | None = None,
                  sessions: list[SessionInfo] | None = None, now: datetime | None = None,
                  **kwargs):
         super().__init__(**kwargs)
+        self._project_name = project_name or (project.name if project else "")
         self._project = project
-        self._prs = prs or []
-        self._sessions = sessions or []
+        self._prs = prs
+        self._sessions = sessions
         self._now = now
         self._all_items: list[SelectableItem] = []
         self._selected_index = 0
@@ -478,19 +480,38 @@ class ProjectScreen(Screen):
         self._search_visible = False
         self._search_query = ""
 
+    def _resolve_data(self) -> None:
+        if self._project is None:
+            try:
+                pd = self.app.store.get_project(self._project_name)
+                if pd:
+                    self._project = pd.info
+                    if self._prs is None:
+                        self._prs = pd.prs
+                    if self._sessions is None:
+                        self._sessions = pd.sessions
+            except Exception:
+                pass
+        if self._project is None:
+            self._project = ProjectInfo(name=self._project_name, account="")
+        if self._prs is None:
+            self._prs = []
+        if self._sessions is None:
+            self._sessions = []
+
     def compose(self) -> ComposeResult:
+        self._resolve_data()
+
         yield Static(
             f"[bold]PPM > {self._project.name}[/bold]",
             id="project-title",
         )
         with VerticalScroll(id="project-scroll"):
-            # Welcome Back section
             welcome_data = _build_welcome_back(
                 self._project.name, self._sessions, self._prs, self._now,
             )
             yield WelcomeBackSection(welcome_data, id="welcome-back")
 
-            # Pull Requests section
             open_prs = [p for p in self._prs if p.state == "open"]
             yield SectionHeader(
                 f"Pull Requests ({len(open_prs)} open)",
@@ -499,7 +520,6 @@ class ProjectScreen(Screen):
             for pr in self._prs:
                 yield PRListItem(pr)
 
-            # Sessions section
             yield SectionHeader(
                 f"Agent Sessions ({len(self._sessions)})",
                 id="sessions-section-header",
@@ -513,14 +533,12 @@ class ProjectScreen(Screen):
                     classes="empty-state",
                 )
 
-            # Activity Timeline section
             yield SectionHeader("Recent Activity", id="activity-section-header")
             events = _build_activity_timeline(
                 self._sessions, self._prs, self._now,
             )
             yield ActivityTimeline(events, now=self._now, id="activity-timeline")
 
-            # Instructions section
             if self._project.instructions:
                 yield SectionHeader("Instructions", id="instructions-header")
                 yield Static(

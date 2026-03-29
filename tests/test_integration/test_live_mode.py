@@ -7,8 +7,8 @@ from unittest.mock import patch, MagicMock
 import pytest
 
 from pm.tui.app import PMApp
-from pm.tui.screens.portfolio import (
-    PortfolioScreen,
+from pm.tui.screens.portfolio import PortfolioScreen
+from pm.tui.store import (
     _has_credentials,
     _fetch_live_projects_and_prs,
 )
@@ -179,7 +179,7 @@ class TestFetchLiveProjectsAndPrs:
 
 class TestTUILiveMode:
     @pytest.mark.asyncio
-    @patch("pm.tui.screens.portfolio._has_credentials", return_value=False)
+    @patch("pm.tui.store._has_credentials", return_value=False)
     @patch("pm.tui.screens.portfolio._is_demo", return_value=False)
     async def test_no_credentials_shows_empty_state(self, mock_demo, mock_creds):
         """Without credentials and not in demo mode, show empty state."""

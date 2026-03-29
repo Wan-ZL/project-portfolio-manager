@@ -44,23 +44,29 @@ async def test_demo_first_project_is_401k():
 
 @pytest.mark.asyncio
 async def test_demo_ai_summaries_loaded():
-    """AI summaries should be pre-loaded in demo mode."""
+    """AI summaries should be pre-loaded in demo mode via store."""
     app = PMApp(demo=True)
     async with app.run_test() as pilot:
-        screen = app.screen
-        assert isinstance(screen, PortfolioScreen)
-        # Demo summaries should be populated
-        assert len(screen._ai_summaries) > 0
+        # Demo summaries should be populated in the store
+        store = app.store
+        has_ai = any(
+            pd.ai_summary is not None
+            for pd in store.get_projects_ordered()
+        )
+        assert has_ai
 
 
 @pytest.mark.asyncio
-async def test_demo_ai_suggestions_loaded():
-    """AI suggestions should be pre-loaded in demo mode."""
+async def test_demo_card_summaries_loaded():
+    """Card summaries should be pre-loaded in demo mode via store."""
     app = PMApp(demo=True)
     async with app.run_test() as pilot:
-        screen = app.screen
-        assert isinstance(screen, PortfolioScreen)
-        assert len(screen._ai_suggestions) > 0
+        store = app.store
+        has_card = any(
+            pd.card_summary is not None
+            for pd in store.get_projects_ordered()
+        )
+        assert has_card
 
 
 @pytest.mark.asyncio

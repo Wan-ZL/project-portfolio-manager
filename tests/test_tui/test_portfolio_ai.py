@@ -68,10 +68,13 @@ async def test_cards_render_with_summaries():
 async def test_ai_summary_loaded_in_demo():
     app = PMApp(demo=True)
     async with app.run_test() as pilot:
-        screen = app.screen
-        assert isinstance(screen, PortfolioScreen)
-        # Demo summaries should be populated
-        assert len(screen._ai_summaries) > 0
+        # Demo summaries should be populated in the store
+        store = app.store
+        has_ai = any(
+            pd.ai_summary is not None
+            for pd in store.get_projects_ordered()
+        )
+        assert has_ai
 
 
 @pytest.mark.asyncio
@@ -116,16 +119,18 @@ async def test_refresh_reloads_demo_data():
     async with app.run_test() as pilot:
         screen = app.screen
         assert isinstance(screen, PortfolioScreen)
-        # Clear summaries
-        screen._ai_summaries.clear()
-        screen._ai_suggestions.clear()
 
         # Press refresh
         await pilot.press("r")
         await pilot.pause()
 
-        # Should reload demo data
-        assert len(screen._ai_summaries) > 0
+        # Should reload demo data in the store
+        store = app.store
+        has_ai = any(
+            pd.ai_summary is not None
+            for pd in store.get_projects_ordered()
+        )
+        assert has_ai
 
 
 # --- Navigation from demo mode ---

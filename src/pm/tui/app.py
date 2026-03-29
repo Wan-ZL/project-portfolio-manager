@@ -8,6 +8,7 @@ from pm.tui.screens.portfolio import PortfolioScreen
 from pm.tui.screens.project import ProjectScreen
 from pm.tui.screens.settings import SettingsScreen
 from pm.tui.screens.task import TaskScreen
+from pm.tui.store import DataStore
 
 
 class PMApp(App):
@@ -29,6 +30,8 @@ class PMApp(App):
         super().__init__(**kwargs)
         self._demo = demo
         self._recovered_sessions: list[dict] = []
+        self.store = DataStore(self)
+        self.store._state.is_demo = demo
 
     DEFAULT_CSS = """
     Screen {
