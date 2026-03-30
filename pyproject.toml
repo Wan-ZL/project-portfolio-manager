@@ -1,0 +1,66 @@
+[project]
+name = "ppm-tool"
+version = "0.1.0"
+description = "AI-powered multi-project portfolio manager CLI with beautiful TUI"
+readme = "README.md"
+requires-python = ">=3.12"
+license = "MIT"
+authors = [
+    { name = "Zelin" },
+]
+keywords = ["project-management", "portfolio", "tui", "ai", "github", "cli"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Software Development :: Build Tools",
+    "Topic :: Utilities",
+]
+dependencies = [
+    "textual>=1.0.0,<2.0",
+    "rich>=14.0",
+    "click",
+    "PyGithub",
+    "sqlmodel",
+    "sqlalchemy",
+    "alembic",
+    "anthropic>=0.40",
+    "pydantic>=2.0",
+    "pyyaml",
+    "pyobjc-framework-Cocoa",
+]
+
+[project.urls]
+Homepage = "https://github.com/user/project-portfolio-manager"
+Repository = "https://github.com/user/project-portfolio-manager"
+Issues = "https://github.com/user/project-portfolio-manager/issues"
+
+[project.scripts]
+ppm = "pm.cli:main"
+ppm-overlay = "pm.overlay.window:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/pm"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+addopts = "-m 'not integration'"
+markers = [
+    "integration: tests that use real GitHub API (deselect with '-m not integration')",
+]
+
+[dependency-groups]
+dev = [
+    "pytest",
+    "pytest-asyncio",
+    "textual-dev",
+]

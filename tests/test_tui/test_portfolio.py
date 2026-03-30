@@ -1,0 +1,160 @@
+from __future__ import annotations
+
+import pytest
+
+from pm.tui.app import PMApp
+from pm.tui.screens.portfolio import PortfolioScreen
+from pm.tui.widgets.project_card import ProjectCard
+
+from tests.conftest import make_seeded_app
+
+
+@pytest.mark.asyncio
+async def test_app_launches():
+    app = PMApp()
+    async with app.run_test() as pilot:
+        assert app.screen is not None
+
+
+@pytest.mark.asyncio
+async def test_portfolio_screen_mounted():
+    app = PMApp()
+    async with app.run_test() as pilot:
+        screen = app.screen
+        assert isinstance(screen, PortfolioScreen)
+
+
+@pytest.mark.asyncio
+async def test_project_cards_render():
+    app = make_seeded_app()
+    async with app.run_test() as pilot:
+        cards = app.query(ProjectCard)
+        assert len(cards) == 4
+
+
+@pytest.mark.asyncio
+async def test_keyboard_navigation_down():
+    app = make_seeded_app()
+    async with app.run_test() as pilot:
+        screen = app.screen
+        assert isinstance(screen, PortfolioScreen)
+        assert screen._selected_index == 0
+
+        await pilot.press("j")
+        assert screen._selected_index == 1
+
+        await pilot.press("j")
+        assert screen._selected_index == 2
+
+
+@pytest.mark.asyncio
+async def test_keyboard_navigation_up():
+    app = make_seeded_app()
+    async with app.run_test() as pilot:
+        screen = app.screen
+        assert isinstance(screen, PortfolioScreen)
+
+        await pilot.press("j")
+        await pilot.press("j")
+        assert screen._selected_index == 2
+
+        await pilot.press("k")
+        assert screen._selected_index == 1
+
+
+@pytest.mark.asyncio
+async def test_keyboard_navigation_bounds():
+    app = make_seeded_app()
+    async with app.run_test() as pilot:
+        screen = app.screen
+        assert isinstance(screen, PortfolioScreen)
+
+        # Should not go below 0
+        await pilot.press("k")
+        assert screen._selected_index == 0
+
+        # Navigate to end
+        for _ in range(10):
+            await pilot.press("j")
+        assert screen._selected_index == 3  # 4 items, max index 3
+
+
+@pytest.mark.asyncio
+async def test_first_project_selected_on_mount():
+    app = make_seeded_app()
+    async with app.run_test() as pilot:
+        screen = app.screen
+        assert isinstance(screen, PortfolioScreen)
+        assert screen.current_project is not None
+        assert screen.current_project.name == "401K Website"
+
+
+@pytest.mark.asyncio
+async def test_quit_binding():
+    app = PMApp()
+    async with app.run_test() as pilot:
+        await pilot.press("q")
+        # App should be closing or closed
+
+
+# --- 4-line card format tests ---
+
+@pytest.mark.asyncio
+async def test_card_has_four_lines():
+    """Each card should have exactly 4 Static children (line1, line2, line3, line4)."""
+    app = make_seeded_app()
+    async with app.run_test() as pilot:
+        from textual.widgets import Static
+        cards = list(app.query(ProjectCard))
+        assert len(cards) > 0
+        for card in cards:
+            statics = list(card.query(Static))
+            assert len(statics) == 4, f"Card {card.project.name} has {len(statics)} lines, expected 4"
+
+
+@pytest.mark.asyncio
+async def test_card_line1_has_name():
+    """Line 1 should contain the project name."""
+    app = make_seeded_app()
+    async with app.run_test() as pilot:
+        from textual.widgets import Static
+        cards = list(app.query(ProjectCard))
+        first_card = cards[0]
+        statics = list(first_card.query(Static))
+        line1_text = statics[0].renderable
+        assert "401K Website" in str(line1_text)
+
+
+@pytest.mark.asyncio
+async def test_card_set_card_data():
+    """set_card_data should update the card's _card_data."""
+    app = make_seeded_app()
+    async with app.run_test() as pilot:
+        cards = list(app.query(ProjectCard))
+        card = cards[0]
+        card.set_card_data(
+            {"dynamic": "test dynamic", "recommendation": "do X", "last_command_summary": "ran Y"},
+            status="running",
+            time="2h ago",
+        )
+        assert card._card_data is not None
+        assert card._card_data["dynamic"] == "test dynamic"
+        assert card._last_command_status == "running"
+        assert card._last_command_time == "2h ago"
+
+
+@pytest.mark.asyncio
+async def test_card_summaries_applied():
+    """Card data should be populated when set via store."""
+    app = make_seeded_app()
+    app.store.set_card_summary(
+        "401K Website",
+        {"dynamic": "PR #42 auth fix CI failing", "recommendation": "Fix CI", "last_command_summary": ""},
+        status="running",
+        time="2h ago",
+    )
+    async with app.run_test() as pilot:
+        cards = list(app.query(ProjectCard))
+        first_card = cards[0]
+        assert first_card._card_data is not None
+        assert "PR #42" in first_card._card_data.get("dynamic", "")

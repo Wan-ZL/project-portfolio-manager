@@ -1,0 +1,144 @@
+/* Project view - single scrollable page with sections */
+
+ProjectScreen {
+    layout: vertical;
+}
+
+#project-title {
+    dock: top;
+    height: 3;
+    content-align: center middle;
+    background: $primary-background-darken-1;
+    color: $primary-lighten-2;
+    text-style: bold;
+    border-bottom: solid $primary 40%;
+    padding: 0 2;
+}
+
+#project-scroll {
+    height: 1fr;
+    scrollbar-color: $primary 50%;
+    scrollbar-color-hover: $primary 80%;
+}
+
+/* Welcome Back section */
+WelcomeBackSection {
+    height: auto;
+    padding: 1 2;
+    margin: 1 2 0 2;
+    border: round $primary 60%;
+    background: $surface-darken-1;
+}
+
+WelcomeBackSection.dismissed {
+    display: none;
+}
+
+/* Section headers */
+SectionHeader {
+    height: 2;
+    padding: 0 2;
+    color: $primary;
+    text-style: bold;
+    border-bottom: solid $primary 30%;
+    margin: 1 0 0 0;
+}
+
+/* PR items */
+PRListItem {
+    height: auto;
+    min-height: 3;
+    padding: 0 2;
+}
+
+PRListItem.selected {
+    background: $accent 30%;
+}
+
+PRListItem:hover {
+    background: $surface-lighten-1;
+}
+
+/* Session items */
+SessionListItem {
+    height: 2;
+    padding: 0 2;
+}
+
+SessionListItem.selected {
+    background: $accent 30%;
+}
+
+SessionListItem:hover {
+    background: $surface-lighten-1;
+}
+
+/* Activity timeline */
+ActivityTimeline {
+    height: auto;
+    padding: 1 2;
+}
+
+/* Instructions */
+#instructions-section {
+    height: auto;
+    padding: 1 2;
+    margin: 0 2;
+    background: $surface-darken-1;
+}
+
+/* Search bar */
+#search-container {
+    dock: bottom;
+    height: auto;
+    max-height: 3;
+    background: $surface-darken-2;
+    padding: 0 1;
+    display: none;
+}
+
+#search-container.visible {
+    display: block;
+}
+
+#search-input {
+    width: 100%;
+}
+
+#search-results-count {
+    height: 1;
+    padding: 0 1;
+    color: $text-muted;
+    display: none;
+}
+
+#search-results-count.visible {
+    display: block;
+}
+
+/* New task input */
+#new-task-container {
+    dock: bottom;
+    height: auto;
+    max-height: 5;
+    background: $surface-darken-2;
+    padding: 0 1;
+    display: none;
+}
+
+#new-task-container.visible {
+    display: block;
+}
+
+#new-task-input {
+    width: 100%;
+}
+
+/* Status bar override */
+StatusBar {
+    dock: bottom;
+    height: 1;
+    background: $primary-background-darken-2;
+    color: $text;
+    padding: 0 1;
+}
