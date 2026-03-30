@@ -11,10 +11,14 @@ LOG_FILE = Path.home() / ".ppm" / "pm.log"
 
 def setup_logging(level: int = logging.INFO) -> None:
     """Configure logging to both file and stderr."""
+    root_logger = logging.getLogger("pm")
+    # Prevent duplicate handlers on repeated calls
+    if root_logger.handlers:
+        return
+
     log_dir = LOG_FILE.parent
     log_dir.mkdir(parents=True, exist_ok=True)
 
-    root_logger = logging.getLogger("pm")
     root_logger.setLevel(level)
 
     # File handler

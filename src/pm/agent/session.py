@@ -262,14 +262,20 @@ class SessionManager:
             model = project_config.agent_config.model
             permissions = project_config.agent_config.permissions
 
+        # Use worktree path, or fall back to project's local_path
+        work_dir = session.worktree_path or ""
+        if not work_dir and project_config and project_config.local_path:
+            work_dir = project_config.local_path
+
         launch_opts = LaunchOptions(
             prompt=session.task_description or "",
-            work_dir=session.worktree_path or "",
+            work_dir=work_dir,
             model=model,
             permissions=permissions,
         )
         agent_cmd = agent.launch_command(launch_opts)
-        cmd_str = " ".join(agent_cmd)
+        import shlex
+        cmd_str = " ".join(shlex.quote(arg) for arg in agent_cmd)
 
         subprocess.run(
             ["tmux", "send-keys", "-t", session.tmux_session, cmd_str, "Enter"],
@@ -333,8 +339,9 @@ class SessionManager:
         if result.returncode != 0:
             raise RuntimeError(f"Failed to create tmux session: {result.stderr.strip()}")
 
-        # Send the agent command
-        cmd_str = " ".join(agent_cmd)
+        # Send the agent command (shell-escaped to prevent injection)
+        import shlex
+        cmd_str = " ".join(shlex.quote(arg) for arg in agent_cmd)
         subprocess.run(
             ["tmux", "send-keys", "-t", name, cmd_str, "Enter"],
             capture_output=True,

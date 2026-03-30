@@ -156,7 +156,8 @@ class StatusPanel(Widget):
                     "\n[dim italic]Press [bold]s[/bold] for AI suggestions on what to work on next.[/dim italic]"
                 )
         except Exception:
-            pass
+            import logging
+            logging.getLogger(__name__).debug("_update_display failed", exc_info=True)
 
 
 class DetailPanel(Widget):

@@ -68,5 +68,6 @@ class ReactionTracker(SQLModel, table=True):
     id: str = Field(primary_key=True)  # session_id:reaction_key
     reaction_key: Optional[str] = None
     attempt_count: int = 0
+    first_attempt_at: Optional[datetime] = None
     last_attempt_at: Optional[datetime] = None
     escalated: bool = False

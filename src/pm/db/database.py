@@ -67,19 +67,27 @@ class Database:
     # PullRequest CRUD
     def upsert_pr(self, pr: PullRequest) -> PullRequest:
         with self.get_session() as session:
+            existing = None
             if pr.id:
                 existing = session.get(PullRequest, pr.id)
-                if existing:
-                    for field_name in ["repo_id", "number", "title", "state", "author",
-                                       "created_at", "updated_at", "ci_status", "review_status",
-                                       "unresolved_comments", "last_synced_at", "needs_attention"]:
-                        val = getattr(pr, field_name)
-                        if val is not None:
-                            setattr(existing, field_name, val)
-                    session.add(existing)
-                    session.commit()
-                    session.refresh(existing)
-                    return existing
+            if not existing:
+                # Look up by repo_id + number to avoid duplicate inserts
+                stmt = select(PullRequest).where(
+                    PullRequest.repo_id == pr.repo_id,
+                    PullRequest.number == pr.number,
+                )
+                existing = session.exec(stmt).first()
+            if existing:
+                for field_name in ["repo_id", "number", "title", "state", "author",
+                                   "created_at", "updated_at", "ci_status", "review_status",
+                                   "unresolved_comments", "last_synced_at", "needs_attention"]:
+                    val = getattr(pr, field_name)
+                    if val is not None:
+                        setattr(existing, field_name, val)
+                session.add(existing)
+                session.commit()
+                session.refresh(existing)
+                return existing
             session.add(pr)
             session.commit()
             session.refresh(pr)
@@ -169,6 +177,7 @@ class Database:
             existing = session.get(ReactionTracker, tracker.id)
             if existing:
                 existing.attempt_count = tracker.attempt_count
+                existing.first_attempt_at = tracker.first_attempt_at
                 existing.last_attempt_at = tracker.last_attempt_at
                 existing.escalated = tracker.escalated
                 session.add(existing)

@@ -133,9 +133,12 @@ class ReactionEngine:
         sessions = self._get_active_sessions_with_pr()
         transitions = []
 
+        loop = asyncio.get_event_loop()
         for session in sessions:
             try:
-                new_state = self._determine_state(session)
+                new_state = await loop.run_in_executor(
+                    None, self._determine_state, session
+                )
                 old_state = self._session_states.get(session.id, PRState.UNKNOWN)
 
                 if new_state != old_state:
@@ -231,7 +234,10 @@ class ReactionEngine:
         if not repo:
             return
 
-        review_status = self.review_monitor.get_review_status(session.pr_number, repo)
+        loop = asyncio.get_event_loop()
+        review_status = await loop.run_in_executor(
+            None, self.review_monitor.get_review_status, session.pr_number, repo
+        )
         old_fp = self._session_fingerprints.get(session.id, "")
         new_fp = review_status.fingerprint
 

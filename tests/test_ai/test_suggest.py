@@ -303,7 +303,7 @@ def test_engine_get_cached_suggestions(db):
     suggestions_data = [
         {"priority": "high", "project": "proj", "action": "Fix", "reason": "Broken"},
     ]
-    db.save_summary("__suggestions__", "", json.dumps(suggestions_data), "hash1")
+    db.save_summary("__ppm_internal__suggestions__", "", json.dumps(suggestions_data), "hash1")
 
     engine = AISuggestionEngine(db=db)
     result = engine.get_cached_suggestions()

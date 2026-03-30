@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import logging
 import subprocess
+import threading
 from collections import deque
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -25,29 +26,37 @@ class NotificationQueue:
 
     def __init__(self, max_size: int = 100):
         self._queue: deque[Notification] = deque(maxlen=max_size)
+        self._lock = threading.RLock()
 
     def push(self, notification: Notification) -> None:
-        self._queue.appendleft(notification)
+        with self._lock:
+            self._queue.appendleft(notification)
 
     def get_all(self) -> list[Notification]:
-        return list(self._queue)
+        with self._lock:
+            return list(self._queue)
 
     def get_unread(self) -> list[Notification]:
-        return [n for n in self._queue if not n.read]
+        with self._lock:
+            return [n for n in self._queue if not n.read]
 
     def mark_all_read(self) -> None:
-        for n in self._queue:
-            n.read = True
+        with self._lock:
+            for n in self._queue:
+                n.read = True
 
     def clear(self) -> None:
-        self._queue.clear()
+        with self._lock:
+            self._queue.clear()
 
     @property
     def unread_count(self) -> int:
-        return sum(1 for n in self._queue if not n.read)
+        with self._lock:
+            return sum(1 for n in self._queue if not n.read)
 
     def __len__(self) -> int:
-        return len(self._queue)
+        with self._lock:
+            return len(self._queue)
 
 
 # Global notification queue for the application

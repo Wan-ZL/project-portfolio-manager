@@ -106,4 +106,4 @@ def generate_config_from_repos(
         "",
     ])
 
-    config_path.write_text("\n".join(lines) + "\n")
+    config_path.write_text("\n".join(lines) + "\n", encoding="utf-8")

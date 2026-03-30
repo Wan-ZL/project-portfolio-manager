@@ -40,8 +40,8 @@ SUMMARY_SYSTEM_PROMPT = """你是一个简洁的工程状态助理。用中文 +
 - "所有 4 个 PR CI 通过 + approved — 可以 merge 了"
 """
 
-# API key file path (with invisible character in filename, matching user's actual path)
-API_KEY_FILE = Path("/Users/zelin/Downloads/API Key/\u200eanthropic-api-key.txt")
+# Portable API key file path (user home directory)
+API_KEY_FILE = Path.home() / ".ppm" / "anthropic-api-key.txt"
 
 MODEL = "claude-sonnet-4-20250514"
 
@@ -209,12 +209,18 @@ def parse_summary_response(response_text: str) -> dict:
     # Try to find JSON block in markdown code block
     if "```json" in text:
         start = text.index("```json") + 7
-        end = text.index("```", start)
-        text = text[start:end].strip()
+        end = text.find("```", start)
+        if end != -1:
+            text = text[start:end].strip()
+        else:
+            text = text[start:].strip()
     elif "```" in text:
         start = text.index("```") + 3
-        end = text.index("```", start)
-        text = text[start:end].strip()
+        end = text.find("```", start)
+        if end != -1:
+            text = text[start:end].strip()
+        else:
+            text = text[start:].strip()
 
     try:
         data = json.loads(text)

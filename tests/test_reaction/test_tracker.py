@@ -105,8 +105,9 @@ class TestReactionTracker:
     def test_should_escalate_by_timeout(self):
         # Record an attempt in the past
         t = self.tracker.record_attempt("s-001", "changes-requested")
-        # Manually set last_attempt_at to the past
+        # Manually set first_attempt_at to the past (escalation measures from first attempt)
         model = self.db.get_reaction_tracker("s-001:changes-requested")
+        model.first_attempt_at = datetime.now() - timedelta(minutes=31)
         model.last_attempt_at = datetime.now() - timedelta(minutes=31)
         self.db.upsert_reaction_tracker(model)
 

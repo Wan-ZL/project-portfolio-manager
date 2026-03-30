@@ -14,9 +14,12 @@ def load_credentials(path: Path | None = None) -> dict:
     cred_path = path or CREDENTIALS_PATH
     if not cred_path.exists():
         return {"accounts": {}}
-    with open(cred_path) as f:
-        raw = yaml.safe_load(f)
-    if raw is None:
+    try:
+        with open(cred_path) as f:
+            raw = yaml.safe_load(f)
+    except yaml.YAMLError:
+        return {"accounts": {}}
+    if raw is None or not isinstance(raw, dict):
         return {"accounts": {}}
     if "accounts" not in raw:
         raw["accounts"] = {}

@@ -134,7 +134,7 @@ async def test_task_screen_kill():
 
         await pilot.press("k")
         await pilot.pause()
-        assert screen._session.status == "completed"
+        assert screen._session.status == "killed"
 
 
 @pytest.mark.asyncio

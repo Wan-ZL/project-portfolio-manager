@@ -646,6 +646,18 @@ class ProjectScreen(Screen):
                     matching_session = s
                     break
             if matching_session:
+                from pm.reaction.actions import send_to_agent
+                if pr.ci_status == "failing":
+                    fix_msg = (
+                        "CI is failing on your PR. Run `gh pr checks` to see "
+                        "failures, fix them, and push."
+                    )
+                else:
+                    fix_msg = (
+                        "There are review comments on your PR. Check with "
+                        "`gh pr view --comments`. Address each one, push fixes."
+                    )
+                send_to_agent(matching_session.tmux_session or "", fix_msg)
                 status_bar.set_message(
                     f"Sent fix command to session '{matching_session.task}' "
                     f"for PR #{pr.number}"

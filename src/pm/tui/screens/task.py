@@ -270,7 +270,7 @@ class TaskScreen(Screen):
             status_bar.set_message("Session resumed")
 
     def action_kill_session(self) -> None:
-        self.update_status("completed")
+        self.update_status("killed")
         status_bar = self.query_one(StatusBar)
         status_bar.set_message("Session killed")
 

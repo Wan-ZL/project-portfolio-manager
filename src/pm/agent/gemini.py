@@ -35,8 +35,12 @@ class GeminiAgent(Agent):
             if pattern in last_lines:
                 return ActivityState.EXITED
 
-        input_patterns = ["? ", "> ", "y/n", "(Y/n)", "(y/N)"]
-        for pattern in input_patterns:
+        trailing_space_patterns = ["? ", "> "]
+        for pattern in trailing_space_patterns:
+            if last_lines.endswith(pattern):
+                return ActivityState.WAITING_INPUT
+        stripped_patterns = ["y/n", "(Y/n)", "(y/N)"]
+        for pattern in stripped_patterns:
             if last_lines.rstrip().endswith(pattern):
                 return ActivityState.WAITING_INPUT
 

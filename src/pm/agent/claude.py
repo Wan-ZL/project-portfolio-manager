@@ -41,14 +41,11 @@ class ClaudeCodeAgent(Agent):
 
         # Check for waiting input patterns
         # Some patterns match if the last lines end with them
-        endswith_patterns = [
-            "y/n",
-            "Y/n",
-            "(y/N)",
-            "(Y/n)",
-            "? ",
-            "> ",
-        ]
+        endswith_patterns = ["y/n", "Y/n", "(y/N)", "(Y/n)"]
+        trailing_space_patterns = ["? ", "> "]
+        for pattern in trailing_space_patterns:
+            if last_lines.endswith(pattern):
+                return ActivityState.WAITING_INPUT
         for pattern in endswith_patterns:
             if last_lines.rstrip().endswith(pattern):
                 return ActivityState.WAITING_INPUT

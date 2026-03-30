@@ -63,7 +63,10 @@ class ReactionTracker:
         """Record an attempt for a session+reaction."""
         tracker = self.get_tracker(session_id, reaction_key)
         tracker.attempt_count += 1
-        tracker.last_attempt_at = datetime.now()
+        now = datetime.now()
+        if tracker.first_attempt_at is None:
+            tracker.first_attempt_at = now
+        tracker.last_attempt_at = now
         self.db.upsert_reaction_tracker(tracker)
         return tracker
 
@@ -86,11 +89,12 @@ class ReactionTracker:
         if tracker.attempt_count >= max_retries:
             return True
 
-        # Check escalation timeout
-        if escalate_after and tracker.last_attempt_at:
+        # Check escalation timeout from the first attempt, not the last
+        first_at = tracker.first_attempt_at or tracker.last_attempt_at
+        if escalate_after and first_at:
             timeout = parse_duration(escalate_after)
             if timeout.total_seconds() > 0:
-                elapsed = datetime.now() - tracker.last_attempt_at
+                elapsed = datetime.now() - first_at
                 if elapsed >= timeout:
                     return True
 
@@ -116,6 +120,7 @@ class ReactionTracker:
         if existing:
             existing.attempt_count = 0
             existing.escalated = False
+            existing.first_attempt_at = None
             existing.last_attempt_at = None
             self.db.upsert_reaction_tracker(existing)
 

@@ -100,12 +100,18 @@ def parse_suggestions_response(response_text: str) -> list[Suggestion]:
     # Try to extract JSON from markdown code block
     if "```json" in text:
         start = text.index("```json") + 7
-        end = text.index("```", start)
-        text = text[start:end].strip()
+        end = text.find("```", start)
+        if end != -1:
+            text = text[start:end].strip()
+        else:
+            text = text[start:].strip()
     elif "```" in text:
         start = text.index("```") + 3
-        end = text.index("```", start)
-        text = text[start:end].strip()
+        end = text.find("```", start)
+        if end != -1:
+            text = text[start:end].strip()
+        else:
+            text = text[start:].strip()
 
     try:
         data = json.loads(text)
@@ -179,7 +185,7 @@ class AISuggestionEngine:
             List of Suggestion objects ordered by priority
         """
         # Check cache
-        cache_key = "__suggestions__"
+        cache_key = "__ppm_internal__suggestions__"
         input_hash = hashlib.sha256(
             json.dumps(projects_data, sort_keys=True, default=str).encode()
         ).hexdigest()[:16]
@@ -227,7 +233,7 @@ class AISuggestionEngine:
         """Get cached suggestions if available."""
         if not self.db:
             return []
-        cached = self.db.get_summary("__suggestions__")
+        cached = self.db.get_summary("__ppm_internal__suggestions__")
         if cached and cached.suggestions:
             try:
                 data = json.loads(cached.suggestions)

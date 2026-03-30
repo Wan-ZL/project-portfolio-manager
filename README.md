@@ -31,29 +31,29 @@ uv tool install pm-tool
 git clone https://github.com/user/project-portfolio-manager.git
 cd project-portfolio-manager
 uv sync
-uv run pm --demo
+uv run ppm --demo
 ```
 
 ## Quick Start
 
 ```bash
 # Launch the TUI in demo mode (no config needed)
-pm --demo
+ppm --demo
 
 # Create a sample config
-pm config init
+ppm config init
 
 # Edit the config
-$EDITOR ~/.pm/config.yaml
+$EDITOR ~/.ppm/config.yaml
 
 # Launch the TUI
-pm
+ppm
 
 # CLI commands (no TUI)
-pm status          # Print portfolio summary
-pm prs             # List all open PRs
-pm config          # Show current config
-pm work myproject "fix the auth bug"  # Spawn agent from CLI
+ppm status          # Print portfolio summary
+ppm prs             # List all open PRs
+ppm config          # Show current config
+ppm work myproject "fix the auth bug"  # Spawn agent from CLI
 ```
 
 ## Configuration
